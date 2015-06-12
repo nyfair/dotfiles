@@ -25,13 +25,18 @@ zstyle ':completion:*' ignore-parents parent pwd directory
 zstyle ':completion:*' menu select
 
 alias ls='ls --color'
-alias ll='ls -li -ctr'
+alias ll='ls -o'
 alias df='df -Th'
 alias du='du -h'
 alias grep='grep --color'
-alias lua=luajit
-alias pgit="all_proxy=socks5://127.0.0.1:17727 git"
-alias conv="luajit /opt/fi-luajit/test/conv.lua"
+alias md='mkdir -p'
+alias rd='rm -rf'
 
+# personal configuration
+alias lua=luajit
+alias ss='all_proxy=socks5://127.0.0.1:17727'
+alias conv='noglob luajit /opt/fi-luajit/test/conv.lua'
 export C_INCLUDE_PATH=/usr/include
 export CPLUS_INCLUDE_PATH=/usr/include
+export EDITOR=/e/nyfair/sublime/sublime_text
+alias vv=$EDITOR

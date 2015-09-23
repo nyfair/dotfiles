@@ -41,4 +41,3 @@ export C_INCLUDE_PATH=/usr/include
 export CPLUS_INCLUDE_PATH=/usr/include
 export EDITOR=/e/nyfair/sublime/sublime_text
 alias vv=$EDITOR
-alias cgr='cargo rustc --release -- -C lto -C link-args="-L. -Wl,--subsystem,windows"'

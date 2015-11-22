@@ -3,6 +3,7 @@ autoload -U colors && colors
 PS1="%F{2}nyfair%F{3}@%F{6}%1d %f"
 [[ -n "${key[PageUp]}" ]] && bindkey "${key[PageUp]}" history-beginning-search-backward
 [[ -n "${key[PageDown]}" ]] && bindkey "${key[PageDown]}" history-beginning-search-forward
+bindkey "\e[3~" delete-char
 
 setopt complete_aliases
 setopt auto_cd
@@ -41,4 +42,4 @@ export C_INCLUDE_PATH=/usr/include
 export CPLUS_INCLUDE_PATH=/usr/include
 export EDITOR=/e/nyfair/sublime/sublime_text
 alias vv=$EDITOR
-alias cgr='cargo rustc --release -- -C lto'
+alias cgr='cargo build --release'

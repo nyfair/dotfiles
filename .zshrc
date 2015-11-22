@@ -4,6 +4,8 @@ PS1="%F{2}nyfair%F{3}@%F{6}%1d %f"
 [[ -n "${key[PageUp]}" ]] && bindkey "${key[PageUp]}" history-beginning-search-backward
 [[ -n "${key[PageDown]}" ]] && bindkey "${key[PageDown]}" history-beginning-search-forward
 bindkey "\e[3~" delete-char
+bindkey "\e[H" beginning-of-line
+bindkey "\e[F" end-of-line
 
 setopt complete_aliases
 setopt auto_cd

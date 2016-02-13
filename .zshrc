@@ -36,6 +36,7 @@ alias md='mkdir -p'
 alias rd='rm -rf'
 
 # personal configuration
+alias rb=ruby
 alias lua=luajit
 alias py=/e/nyfair/sublime/python
 alias ss='all_proxy=socks5://127.0.0.1:17727'

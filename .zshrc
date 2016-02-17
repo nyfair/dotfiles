@@ -38,11 +38,11 @@ alias rd='rm -rf'
 # personal configuration
 alias rb=ruby
 alias lua=luajit
-alias py=/e/nyfair/sublime/python
+alias py=python3
 alias ss='all_proxy=socks5://127.0.0.1:17727'
 alias conv='noglob luajit /opt/fi-luajit/test/conv.lua'
 export C_INCLUDE_PATH=/usr/include
 export CPLUS_INCLUDE_PATH=/usr/include
-export EDITOR=/e/nyfair/sublime/sublime_text
+export EDITOR="/c/Program\ Files\ \(x86\)/Microsoft\ VS\ Code/code"
 alias vv=$EDITOR
 alias cgr='cargo build --release'

@@ -27,7 +27,6 @@ zmodload -i zsh/complist
 zstyle ':completion:*' ignore-parents parent pwd directory
 zstyle ':completion:*' menu select
 
-alias ls='ls --color'
 alias ll='ls -o'
 alias df='df -Th'
 alias du='du -h'

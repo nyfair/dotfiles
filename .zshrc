@@ -43,7 +43,7 @@ alias ss='all_proxy=socks5://127.0.0.1:17727'
 alias conv='noglob luajit /opt/fi-luajit/test/conv.lua'
 export C_INCLUDE_PATH=/usr/include
 export CPLUS_INCLUDE_PATH=/usr/include
-export EDITOR="/c/Program\ Files\ \(x86\)/Microsoft\ VS\ Code/code"
+export EDITOR='/c/Program\ Files\ \(x86\)/Microsoft\ VS\ Code/code'
 alias vv=$EDITOR
 alias cgr='cargo build --release'
 export RUSTUP_DIST_SERVER=https://mirrors.ustc.edu.cn/rust-static

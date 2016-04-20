@@ -15,14 +15,16 @@
 	b = branch
 	c = commit -m
 	d = diff
+	e = clone
+	i = init
 	l = log
 	m = merge
 	o = checkout
 	p = push
-	r = rm -r --cached
+	r = reset
 	s = status
 	t = tag
 	u = pull
-	e = clone
+	v = rebase
 [status]
 	submoduleSummary = true

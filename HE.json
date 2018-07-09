@@ -1,0 +1,72 @@
+{
+	"request": [
+		{
+			"enable": 1,
+			"name": "panda",
+			"ruleType": "redirect",
+			"matchType": "regexp",
+			"pattern": "^https://e-hentai\\.org/(.*)",
+			"exclude": "",
+			"isFunction": false,
+			"action": "redirect",
+			"to": "  https://exhentai.org/$1",
+			"id": 1,
+			"_reg": {}
+		},
+		{
+			"enable": 1,
+			"name": "gbiatch js",
+			"ruleType": "redirect",
+			"matchType": "regexp",
+			"pattern": "^https://ajax\\.googleapis\\.com/(.*)",
+			"exclude": "",
+			"isFunction": false,
+			"action": "redirect",
+			"to": "https://ajax.loli.net/$1",
+			"id": 2,
+			"_reg": {}
+		},
+		{
+			"enable": 1,
+			"name": "gbiatch font",
+			"ruleType": "redirect",
+			"matchType": "regexp",
+			"pattern": "^https://fonts\\.googleapis\\.com/(.*)",
+			"exclude": "",
+			"isFunction": false,
+			"action": "redirect",
+			"to": "https://fonts.loli.net/$1",
+			"id": 3,
+			"_reg": {}
+		},
+		{
+			"enable": 1,
+			"name": "tieba img",
+			"ruleType": "redirect",
+			"matchType": "regexp",
+			"pattern": "^https://tieba\\.baidu\\.com/photo.*pic_id=(.*)&pn.*",
+			"exclude": "",
+			"isFunction": false,
+			"action": "redirect",
+			"to": "https://imgsrc.baidu.com/forum/pic/item/$1.jpg",
+			"id": 4,
+			"_reg": {}
+		},
+		{
+			"enable": 1,
+			"name": "ex tag",
+			"ruleType": "redirect",
+			"matchType": "regexp",
+			"pattern": "^https://exhentai\\.org/tag/",
+			"exclude": "",
+			"isFunction": true,
+			"action": "redirect",
+			"to": "$1",
+			"id": 5,
+			"code": "if (val.includes('f_sh=on')) {\n  return val\n}\nlet s = val.lastIndexOf('/')\nif (val.substring(s-3,s) == 'tag') {\n  return val + '&f_sh=on'\n}\nreturn val.substring(0,s) + '&f_sh=on' + val.substring(s)",
+			"_reg": {}
+		}
+	],
+	"sendHeader": [],
+	"receiveHeader": []
+}

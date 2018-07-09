@@ -1,0 +1,167 @@
+{
+  "timestamp": "2018-07-09T16:51:50.117Z",
+  "fileName": "fg.json",
+  "addonId": "{e839c3f9-298e-4cd0-99e0-464431cb7c34}",
+  "version": "1.2.0",
+  "settings": {
+    "gestureTimeout": 2000,
+    "statusTimeout": 2000,
+    "showStatusText": true,
+    "blacklistUrlPatterns": [],
+    "whitelistMode": false,
+    "gestureDetector": {
+      "style": "cardinal"
+    },
+    "gestureButton": 2,
+    "gestureFidelity": 10,
+    "drawTrails": true,
+    "trailFidelity": 10,
+    "trailWidth": 2,
+    "trailColor": "green",
+    "mouseMappings": [
+      {
+        "command": "closeOtherTabs",
+        "gesture": "DU"
+      },
+      {
+        "command": "closeLeftTabs",
+        "gesture": "DL"
+      },
+      {
+        "command": "closeTab",
+        "gesture": "UD"
+      },
+      {
+        "command": "closeRightTabs",
+        "gesture": "DR"
+      },
+      {
+        "command": "nextTab",
+        "gesture": "R"
+      },
+      {
+        "command": "scrollTop",
+        "gesture": "U"
+      },
+      {
+        "command": "scrollBottom",
+        "gesture": "D"
+      },
+      {
+        "command": "undoClose",
+        "gesture": "LR"
+      },
+      {
+        "command": "reloadBypassCache",
+        "gesture": "RL"
+      },
+      {
+        "command": "previousTab",
+        "gesture": "L"
+      },
+      {
+        "command": "userScript",
+        "gesture": "UR",
+        "userScript": "userScript:1511680862369"
+      },
+      {
+        "command": "reloadAllTabs",
+        "gesture": "RLR"
+      },
+      {
+        "command": "viewFrameSource",
+        "gesture": "RU"
+      },
+      {
+        "command": "viewPageSource",
+        "gesture": "RD"
+      },
+      {
+        "command": "userScript",
+        "gesture": "URD",
+        "userScript": "userScript:1522770459060"
+      },
+      {
+        "command": "userScript",
+        "gesture": "UL",
+        "userScript": "userScript:1530367500175"
+      },
+      {
+        "command": "userScript",
+        "gesture": "LU",
+        "userScript": "userScript:1530368127343"
+      },
+      {
+        "command": "userScript",
+        "gesture": "LD",
+        "userScript": "userScript:1530368277254"
+      }
+    ],
+    "disableOnAlt": true,
+    "disableOnShift": false,
+    "canSelectStart": false,
+    "wheelGestures": false,
+    "wheelMappings": {
+      "up": null,
+      "down": null,
+      "left": null,
+      "right": null
+    },
+    "chordGestures": false,
+    "chordMappings": [
+      {
+        "chord": [
+          0,
+          2
+        ],
+        "mapping": null
+      },
+      {
+        "chord": [
+          2,
+          0
+        ],
+        "mapping": null
+      }
+    ],
+    "userScripts": [
+      {
+        "id": "userScript:1511680862369",
+        "label": "自动回帖",
+        "script": "document.querySelector('textarea').innerText = '感谢分享'\ndocument.querySelector('input[type=submit]').click()\ndocument.querySelector('#fastpostsubmit').click()"
+      },
+      {
+        "id": "userScript:1522770459060",
+        "label": "购物党",
+        "script": "let s = document.createElement('script')\ns.setAttribute('src', 'https://browser.gwdang.com/get.js?f=/js/gwdang_extension.js')\ndocument.body.appendChild(s)"
+      },
+      {
+        "id": "userScript:1530367500175",
+        "label": "编辑网页",
+        "script": "document.body.contentEditable = (document.body.contentEditable == 'true') ? 'false' : 'true'\ndocument.designMode = (document.designMode == 'on') ? 'off' : 'on'"
+      },
+      {
+        "id": "userScript:1530368127343",
+        "label": "复制标题",
+        "script": "let c = document.createElement(\"textarea\")\ndocument.body.appendChild(c)\nc.value = document.title\nc.select()\nc.focus()\ndocument.execCommand(\"copy\")\nc.parentNode.removeChild(c)"
+      },
+      {
+        "id": "userScript:1530368277254",
+        "label": "复制网址",
+        "script": "let c = document.createElement(\"textarea\")\ndocument.body.appendChild(c)\nc.value = document.baseURI\nc.select()\nc.focus()\ndocument.execCommand(\"copy\")\nc.parentNode.removeChild(c)"
+      }
+    ],
+    "sawXSSWarning": true,
+    "scrollDuration": 500,
+    "scrollAmount": 100,
+    "nextTabWrap": true,
+    "newTabUrl": null,
+    "newWindowUrl": null,
+    "newPrivateWindowUrl": null,
+    "useRelPrevNext": true,
+    "insertRelatedTab": true,
+    "zoomStep": 0.1,
+    "activeTabAfterClose": "default",
+    "statusTemplate": "<div style=\"all: initial; display: block; position: fixed; bottom: 0; right: 0; z-index: 2147483647\">\r\n  <div style=\"all: initial; background: #fff; border: 1px solid #ccc; color: #333; font-family: sans-serif; font-size: 12px; padding: 2px\" data-mg-status></div>\r\n</div>"
+  }
+}

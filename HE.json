@@ -39,7 +39,7 @@
 		},
 		{
 			"enable": true,
-			"name": "tieba img",
+			"name": "pc tieba img",
 			"ruleType": "redirect",
 			"matchType": "regexp",
 			"pattern": "^https://tieba\\.baidu\\.com/photo.*pic_id=(.*)&pn.*",
@@ -73,8 +73,35 @@
 			"isFunction": false,
 			"action": "redirect",
 			"to": "https://www.white-plus.net/$1"
+		},
+		{
+			"enable": false,
+			"name": "fuck mobile tieba img",
+			"ruleType": "redirect",
+			"matchType": "regexp",
+			"pattern": "^http://c\\.hiphotos\\.baidu\\.com/forum/w.*%2F(.*)",
+			"exclude": "",
+			"group": "Ungrouped",
+			"isFunction": false,
+			"action": "redirect",
+			"to": "https://imgsrc.baidu.com/forum/pic/item/$1"
 		}
 	],
-	"sendHeader": [],
+	"sendHeader": [
+		{
+			"enable": false,
+			"name": "fuck mobile tieba",
+			"ruleType": "modifySendHeader",
+			"matchType": "domain",
+			"pattern": "tieba.baidu.com",
+			"exclude": "",
+			"group": "Ungrouped",
+			"isFunction": false,
+			"action": {
+				"name": "user-agent",
+				"value": "iPhone"
+			}
+		}
+	],
 	"receiveHeader": []
 }

@@ -93,7 +93,7 @@
 			"name": "fuck mobile tieba",
 			"ruleType": "modifySendHeader",
 			"matchType": "domain",
-			"pattern": "tieba.baidu.com",
+			"pattern": "m.baidu.com",
 			"exclude": "",
 			"group": "Ungrouped",
 			"isFunction": false,

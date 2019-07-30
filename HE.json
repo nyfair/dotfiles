@@ -1,7 +1,7 @@
 {
 	"request": [
 		{
-			"enable": true,
+			"enable": false,
 			"name": "panda",
 			"ruleType": "redirect",
 			"matchType": "regexp",
@@ -103,12 +103,12 @@
 			"name": "fuck mobile tieba group",
 			"ruleType": "redirect",
 			"matchType": "regexp",
-			"pattern": "^https://tieba\\.baidu\\.com/.*\?kw=(.*)&.*",
+			"pattern": "^https://tieba\\.baidu\\.com/.*\?(kw=.*)",
 			"exclude": "",
 			"group": "Ungrouped",
 			"isFunction": false,
 			"action": "redirect",
-			"to": "https://tieba.baidu.com/mo/q---3336EEA49DD96DD5A22515A82DB95EDA%3AFG%3D1-,sz@240_320-2-3-0--2/m?kw=$1&lp=1030"
+			"to": "https://tieba.baidu.com/mo/q---3336EEA49DD96DD5A22515A82DB95EDA%3AFG%3D1-,sz@240_320-2-3-0--2/m?$1"
 		}
 	],
 	"sendHeader": [

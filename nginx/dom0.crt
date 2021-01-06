@@ -1,0 +1,87 @@
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number: 7 (0x7)
+        Signature Algorithm: sha256WithRSAEncryption
+        Issuer: C=CN, O=Dominions0 Foundation, CN=dom0
+        Validity
+            Not Before: Jan  4 17:19:59 2021 GMT
+            Not After : Jan  4 17:19:59 2022 GMT
+        Subject: C=CN, O=Dominions0 Foundation, CN=dom0CA
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                RSA Public-Key: (2048 bit)
+                Modulus:
+                    00:f9:8c:99:c0:13:d0:8e:46:de:b6:3d:40:bd:67:
+                    43:9a:16:87:c2:84:cf:87:73:52:2e:6b:c9:5c:8c:
+                    57:06:b8:f3:da:c7:8d:3f:ae:53:01:be:a5:4c:3e:
+                    af:72:1c:8c:7d:d0:3e:00:59:45:c8:78:92:6f:81:
+                    8a:d8:a9:c6:ec:d4:e5:8d:f7:25:be:50:1d:d4:69:
+                    18:aa:55:7c:26:1d:b5:c5:2f:66:96:fd:aa:9e:56:
+                    7e:75:c5:b3:93:b1:c5:32:47:39:10:fc:de:59:9c:
+                    9d:88:81:1d:47:ec:78:bb:32:e3:2f:58:2d:71:b4:
+                    0b:95:cf:8c:b4:b3:ef:c8:63:ab:68:ac:6b:52:39:
+                    40:96:9a:ad:2b:92:33:a0:b9:7c:37:46:eb:fe:f4:
+                    53:46:df:3f:a5:d7:2a:46:f8:2a:ce:97:d4:d0:fa:
+                    73:f2:b1:6d:2e:75:25:b9:b2:a4:4a:70:1f:e9:d1:
+                    7b:77:52:8f:5d:31:a3:ba:02:a4:14:73:83:dc:2f:
+                    c8:2e:3c:86:e2:45:d2:16:19:ff:b6:05:73:cd:6c:
+                    47:2d:a3:3e:33:93:8a:ea:80:61:5e:ac:91:b6:7c:
+                    4a:16:10:71:c3:62:65:1c:a3:9a:5d:f9:2a:3a:ac:
+                    a3:49:8e:d2:ad:0e:c2:d4:d8:3a:f1:1f:05:17:f2:
+                    50:19
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Key Usage: 
+                Digital Signature
+            X509v3 Extended Key Usage: 
+                TLS Web Server Authentication, TLS Web Client Authentication
+            X509v3 Basic Constraints: 
+                CA:FALSE
+            X509v3 Subject Alternative Name: 
+                DNS:*.pixiv.net, DNS:*.secure.pixiv.net, DNS:*.wikipedia.org, DNS:*.m.wikipedia.org, DNS:steamcommunity.com, DNS:nyaa.si, DNS:sukebei.nyaa.si, DNS:exhentai.org, DNS:e-hentai.org, DNS:forums.e-hentai.org, DNS:*.pornhub.com, DNS:*.inoreader.com, DNS:*.reddit.com, DNS:*.redditstatic.com, DNS:*.redditmedia.com, DNS:*.redd.it, DNS:*.githubusercontent.com, DNS:onedrive.live.com, DNS:*.onedrive.live.com
+            X509v3 Subject Key Identifier: 
+                29:C3:EE:51:03:8E:3B:C2:D1:7E:7F:BE:82:F8:C2:EC:12:AF:F0:59
+    Signature Algorithm: sha256WithRSAEncryption
+         23:96:ff:e5:af:9b:6c:42:d0:d3:fe:f6:ea:30:c2:e1:f9:5f:
+         47:be:88:17:b7:f4:8f:22:83:aa:53:5c:93:7e:2f:66:c4:f6:
+         fd:8d:f5:3a:5b:b1:b4:ee:72:8a:45:95:35:92:b5:bd:c6:b0:
+         29:51:dc:f2:0c:07:c6:7c:05:35:ee:b9:9c:04:8d:cf:aa:ab:
+         0b:a0:d9:6d:cd:2e:54:b1:51:df:d2:86:fc:f1:b8:59:e2:3b:
+         b1:49:e2:c2:84:d3:65:64:3d:b6:e3:41:17:5b:c2:f6:9f:ea:
+         39:6a:6f:1b:47:cc:9b:20:6a:e2:95:32:a3:5e:f4:d9:7e:e1:
+         5e:42:9c:47:39:1b:43:f9:0f:a7:2c:98:54:2f:d2:2b:72:4d:
+         7a:73:1b:92:70:e5:27:d0:2f:10:23:38:7a:87:f0:5a:7f:34:
+         d0:f3:09:1a:ea:d1:08:4c:cd:a6:31:e6:42:f1:df:77:81:52:
+         ab:b9:0b:14:39:1c:cf:50:fc:f7:62:37:5f:dd:f1:70:3c:f3:
+         1c:8d:47:78:1e:b6:0b:ff:eb:97:ea:89:14:cc:19:80:5d:2b:
+         53:ab:80:5b:cd:82:56:65:55:e2:f8:77:6e:4f:7e:f6:dc:6e:
+         09:f5:3c:66:79:c0:c6:78:16:c7:4a:21:13:b4:ad:84:25:fd:
+         ad:5e:13:66
+-----BEGIN CERTIFICATE-----
+MIIEpzCCA4+gAwIBAgIBBzANBgkqhkiG9w0BAQsFADA8MQswCQYDVQQGEwJDTjEe
+MBwGA1UECgwVRG9taW5pb25zMCBGb3VuZGF0aW9uMQ0wCwYDVQQDDARkb20wMB4X
+DTIxMDEwNDE3MTk1OVoXDTIyMDEwNDE3MTk1OVowPjELMAkGA1UEBhMCQ04xHjAc
+BgNVBAoMFURvbWluaW9uczAgRm91bmRhdGlvbjEPMA0GA1UEAwwGZG9tMENBMIIB
+IjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA+YyZwBPQjkbetj1AvWdDmhaH
+woTPh3NSLmvJXIxXBrjz2seNP65TAb6lTD6vchyMfdA+AFlFyHiSb4GK2KnG7NTl
+jfclvlAd1GkYqlV8Jh21xS9mlv2qnlZ+dcWzk7HFMkc5EPzeWZydiIEdR+x4uzLj
+L1gtcbQLlc+MtLPvyGOraKxrUjlAlpqtK5IzoLl8N0br/vRTRt8/pdcqRvgqzpfU
+0Ppz8rFtLnUlubKkSnAf6dF7d1KPXTGjugKkFHOD3C/ILjyG4kXSFhn/tgVzzWxH
+LaM+M5OK6oBhXqyRtnxKFhBxw2JlHKOaXfkqOqyjSY7SrQ7C1Ng68R8FF/JQGQID
+AQABo4IBsDCCAawwCwYDVR0PBAQDAgeAMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggr
+BgEFBQcDAjAJBgNVHRMEAjAAMIIBUgYDVR0RBIIBSTCCAUWCCyoucGl4aXYubmV0
+ghIqLnNlY3VyZS5waXhpdi5uZXSCDyoud2lraXBlZGlhLm9yZ4IRKi5tLndpa2lw
+ZWRpYS5vcmeCEnN0ZWFtY29tbXVuaXR5LmNvbYIHbnlhYS5zaYIPc3VrZWJlaS5u
+eWFhLnNpggxleGhlbnRhaS5vcmeCDGUtaGVudGFpLm9yZ4ITZm9ydW1zLmUtaGVu
+dGFpLm9yZ4INKi5wb3JuaHViLmNvbYIPKi5pbm9yZWFkZXIuY29tggwqLnJlZGRp
+dC5jb22CEioucmVkZGl0c3RhdGljLmNvbYIRKi5yZWRkaXRtZWRpYS5jb22CCSou
+cmVkZC5pdIIXKi5naXRodWJ1c2VyY29udGVudC5jb22CEW9uZWRyaXZlLmxpdmUu
+Y29tghMqLm9uZWRyaXZlLmxpdmUuY29tMB0GA1UdDgQWBBQpw+5RA447wtF+f76C
++MLsEq/wWTANBgkqhkiG9w0BAQsFAAOCAQEAI5b/5a+bbELQ0/726jDC4flfR76I
+F7f0jyKDqlNck34vZsT2/Y31OluxtO5yikWVNZK1vcawKVHc8gwHxnwFNe65nASN
+z6qrC6DZbc0uVLFR39KG/PG4WeI7sUniwoTTZWQ9tuNBF1vC9p/qOWpvG0fMmyBq
+4pUyo1702X7hXkKcRzkbQ/kPpyyYVC/SK3JNenMbknDlJ9AvECM4eofwWn800PMJ
+GurRCEzNpjHmQvHfd4FSq7kLFDkcz1D892I3X93xcDzzHI1HeB62C//rl+qJFMwZ
+gF0rU6uAW82CVmVV4vh3bk9+9txuCfU8ZnnAxngWx0ohE7SthCX9rV4TZg==
+-----END CERTIFICATE-----

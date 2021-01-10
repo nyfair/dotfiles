@@ -22,7 +22,7 @@ local user_opts = {
     valign = 0.8,               -- vertical alignment, -1 (top) to 1 (bottom)
     halign = 0,                 -- horizontal alignment, -1 (left) to 1 (right)
     barmargin = 0,              -- vertical margin of top/bottombar
-    boxalpha = 80,              -- alpha of the background box,
+    boxalpha = 200,              -- alpha of the background box,
                                 -- 0 (opaque) to 255 (fully transparent)
     hidetimeout = 500,          -- duration in ms until the OSC hides if no
                                 -- mouse movement. enforced non-negative for the
@@ -528,6 +528,22 @@ local osc_param = { -- calculated by osc_init()
 }
 
 local osc_styles = {
+
+    rjno150Buttons = "{\\blur0\\bord0\\1c&HCBCBCB\\3c&HFFFFFF\\fs46\\fnmpv-osd-symbols}",
+    rjno140Buttons = "{\\blur0\\bord0\\1c&HCBCBCB\\3c&HFFFFFF\\fs36\\fnmpv-osd-symbols}",
+    rjno130Buttons = "{\\blur0\\bord0\\1c&HCBCBCB\\3c&HFFFFFF\\fs26\\fnmpv-osd-symbols}",
+    rjno125Buttons = "{\\blur0\\bord0\\1c&HCBCBCB\\3c&HFFFFFF\\fs25\\fnmpv-osd-symbols}",
+    rjno120Buttons = "{\\blur0\\bord0\\1c&HCBCBCB\\3c&HFFFFFF\\fs20\\fnmpv-osd-symbols}",
+    rjno116Buttons = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs16\\fnmpv-osd-symbols}",
+    rjno1box = "{\\rDefault\\blur0\\bord0\\1c&H3D3833\\3c&HFFFFFF}",	
+    rjno1timecodes = "{\\blur0\\bord0\\1c&HDD9A00\\3c&HFFFFFF\\fs13}",
+    rjno1timePosBar = "{\\blur0\\bord".. user_opts.tooltipborder .."\\1c&HFFFFFF\\3c&H000000\\fs28}",
+    rjno1vidtitleBar = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs13\\q2}",
+	
+    rjno1wcButtons = "{\\1c&HFFFFFF\\fs24\\fnmpv-osd-symbols}",
+    rjno1wcTitle = "{\\1c&HFFFFFF\\fs18\\q2}",
+    rjno1wcBar = "{\\1c&H3D3833}",
+    
     bigButtons = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs50\\fnmpv-osd-symbols}",
     smallButtonsL = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs19\\fnmpv-osd-symbols}",
     smallButtonsLlabel = ("{\\fscx105\\fscy105\\b%d\\fn%s}"):format(user_opts.font_bold, user_opts.font_mono),
@@ -1612,10 +1628,10 @@ local layouts = {}
 layouts["box"] = function ()
 
     local osc_geo = {
-        w = 550,    -- width
-        h = 138,    -- height
-        r = 10,     -- corner-radius
-        p = 15,     -- padding
+        w = 1100,    -- width
+        h = 65,    -- height
+        r = 0,     -- corner-radius
+        p = 0,     -- padding
     }
 
     -- make sure the OSC actually fits into the video
@@ -1670,7 +1686,7 @@ layouts["box"] = function ()
 
     lo.geometry = {x = posX, y = posY, an = 5, w = osc_w, h = osc_h}
     lo.layer = 10
-    lo.style = osc_styles.box
+    lo.style = osc_styles.rjno1box
     lo.alpha[1] = user_opts.boxalpha
     lo.alpha[3] = user_opts.boxalpha
     lo.box.radius = osc_r
@@ -1679,108 +1695,134 @@ layouts["box"] = function ()
     -- Title row
     --
 
-    local titlerowY = posY - pos_offsetY - 10
+--an是元素根据自己的中心线上下浮动，an=1时 元素中心全部在中心点上，an=9 元素全部在中心点右侧和之下
+--box左上角x坐标 posX - pos_offsetX 但an=5 元素中心点坐标和这个坐标一致，所以还要根据an=？加减元素的宽度
+--box左上角y坐标 posY - pos_offsetY 但an=5 元素中心点坐标和这个坐标一致，所以还要根据an=？加减元素的高度
+	local rjno1X = posX - pos_offsetX
+	local rjno1Y = posY - pos_offsetY
 
-    lo = add_layout("title")
-    lo.geometry = {x = posX, y = titlerowY, an = 8, w = 496, h = 12}
-    lo.style = osc_styles.vidtitle
-    lo.button.maxchars = user_opts.boxmaxchars
-
-    lo = add_layout("pl_prev")
-    lo.geometry =
-        {x = (posX - pos_offsetX), y = titlerowY, an = 7, w = 12, h = 12}
-    lo.style = osc_styles.topButtons
-
-    lo = add_layout("pl_next")
-    lo.geometry =
-        {x = (posX + pos_offsetX), y = titlerowY, an = 9, w = 12, h = 12}
-    lo.style = osc_styles.topButtons
-
-    --
-    -- Big buttons
-    --
-
-    local bigbtnrowY = posY - pos_offsetY + 35
-    local bigbtndist = 60
-
-    lo = add_layout("playpause")
-    lo.geometry =
-        {x = posX, y = bigbtnrowY, an = 5, w = 40, h = 40}
-    lo.style = osc_styles.bigButtons
-
-    lo = add_layout("skipback")
-    lo.geometry =
-        {x = posX - bigbtndist, y = bigbtnrowY, an = 5, w = 40, h = 40}
-    lo.style = osc_styles.bigButtons
-
-    lo = add_layout("skipfrwd")
-    lo.geometry =
-        {x = posX + bigbtndist, y = bigbtnrowY, an = 5, w = 40, h = 40}
-    lo.style = osc_styles.bigButtons
-
-    lo = add_layout("ch_prev")
-    lo.geometry =
-        {x = posX - (bigbtndist * 2), y = bigbtnrowY, an = 5, w = 40, h = 40}
-    lo.style = osc_styles.bigButtons
-
-    lo = add_layout("ch_next")
-    lo.geometry =
-        {x = posX + (bigbtndist * 2), y = bigbtnrowY, an = 5, w = 40, h = 40}
-    lo.style = osc_styles.bigButtons
-
-    lo = add_layout("cy_audio")
-    lo.geometry =
-        {x = posX - pos_offsetX, y = bigbtnrowY, an = 1, w = 70, h = 18}
-    lo.style = osc_styles.smallButtonsL
-
-    lo = add_layout("cy_sub")
-    lo.geometry =
-        {x = posX - pos_offsetX, y = bigbtnrowY, an = 7, w = 70, h = 18}
-    lo.style = osc_styles.smallButtonsL
-
-    lo = add_layout("tog_fs")
-    lo.geometry =
-        {x = posX+pos_offsetX - 25, y = bigbtnrowY, an = 4, w = 25, h = 25}
-    lo.style = osc_styles.smallButtonsR
-
-    lo = add_layout("volume")
-    lo.geometry =
-        {x = posX+pos_offsetX - (25 * 2) - osc_geo.p,
-         y = bigbtnrowY, an = 4, w = 25, h = 25}
-    lo.style = osc_styles.smallButtonsR
-
+	
     --
     -- Seekbar
     --
+	geo ={x = rjno1X + 1100 / 2 , y = rjno1Y + 6 , an = 5, w = 1100, h = 13}
+    --lo = add_layout("seekbar")
+	
+--if user_opts["seekbarstyle"] ~= "knob" then   
+   
+   new_element("bgbar1", "box")
+    lo = add_layout("bgbar1")
 
+    lo.geometry = geo
+    lo.layer = 13
+    lo.style = osc_styles.rjno1vidtitleBar
+    lo.alpha[1] =
+        math.min(255, user_opts.boxalpha + (255 - user_opts.boxalpha)*0.05)
+    if not (user_opts["seekbarstyle"] == "bar") then
+        lo.box.radius = geo.h / 2
+        lo.box.hexagon = user_opts["seekbarstyle"] == "diamond"
+    end
+
+--end	
+	
     lo = add_layout("seekbar")
-    lo.geometry =
-        {x = posX, y = posY+pos_offsetY-22, an = 2, w = pos_offsetX*2, h = 15}
-    lo.style = osc_styles.timecodes
-    lo.slider.tooltip_style = osc_styles.vidtitle
+    lo.geometry = geo
+    lo.style = osc_styles.rjno1timecodes
+    lo.slider.border = 0
+    lo.slider.gap = 0
+    lo.slider.tooltip_style = osc_styles.rjno1timePosBar
+    lo.slider.tooltip_an = 5
     lo.slider.stype = user_opts["seekbarstyle"]
     lo.slider.rtype = user_opts["seekrangestyle"]
+	
+--if user_opts["seekbarstyle"] == "knob" then 
+--		lo.geometry.y = rjno1Y + 6 + 4
+--	end	
+	
 
-    --
-    -- Timecodes + Cache
-    --
 
-    local bottomrowY = posY + pos_offsetY - 5
+	
+    lo = add_layout("pl_prev")
+    lo.geometry = {x = rjno1X + 10 * 3.5 * 0 + 10 * 3 -8, y = rjno1Y + 10 * 1.6 + 50 / 2 , an = 5, w = 30, h = 50}
+    lo.style = osc_styles.rjno130Buttons	
+	
+    lo = add_layout("ch_prev")
+    lo.geometry = {x = rjno1X + 10 * 3.5 * 1 + 10 * 3 -8, y = rjno1Y + 10 * 1.6 + 50 / 2 , an = 5, w = 30, h = 50}
+    lo.style = osc_styles.rjno140Buttons	
+	
+	lo = add_layout("skipback")
+    lo.geometry = {x = rjno1X + 10 * 3.5 * 2 + 10 * 3 -8, y = rjno1Y + 10 * 1.6 + 50 / 2 , an = 5, w = 30, h = 50}
+    lo.style = osc_styles.rjno140Buttons	
 
+	
+    lo = add_layout("playpause")
+    lo.geometry = {x = rjno1X + 10 * 3.5 * 3 + 10 * 3 -8, y = rjno1Y + 10 * 1.6 + 50 / 2 , an = 5, w = 30, h = 50}
+    lo.style = osc_styles.rjno150Buttons		
+	
+		
+    lo = add_layout("skipfrwd")
+    lo.geometry = {x = rjno1X + 10 * 3.5 * 4 + 10 * 3 -8, y = rjno1Y + 10 * 1.6 + 50 / 2 , an = 5, w = 30, h = 50}
+    lo.style = osc_styles.rjno140Buttons	
+
+	
+	lo = add_layout("ch_next")
+    lo.geometry = {x = rjno1X + 10 * 3.5 * 5 + 10 * 3 -8, y = rjno1Y + 10 * 1.6 + 50 / 2 , an = 5, w = 30, h = 50}
+    lo.style = osc_styles.rjno140Buttons	
+	
+	
+
+    lo = add_layout("pl_next")
+    lo.geometry = {x = rjno1X + 10 * 3.5 * 6 + 10 * 3 -8, y = rjno1Y + 10 * 1.6 + 50 / 2 , an = 5, w = 30, h = 50}
+    lo.style = osc_styles.rjno130Buttons	
+	
+	
+--an = 5 时文字居中显示 往2边增加，所以一定要用1，这样多出的文字只会往右侧增长
+	lo = add_layout("title")
+    lo.geometry = {x = rjno1X + 10 * 26 , y = rjno1Y + 10 * 2.6 + 20 / 2 , an = 1, w = 1100 - 10 * 3.5 * 7, h = 20}
+    lo.style = osc_styles.rjno116Buttons	
+    --lo.button.maxchars = user_opts.boxmaxchars
+
+	
+
+
+
+
+--an = 1 这样左侧的时间变长才会往右，但y轴要调整
     lo = add_layout("tc_left")
-    lo.geometry =
-        {x = posX - pos_offsetX, y = bottomrowY, an = 4, w = 110, h = 18}
-    lo.style = osc_styles.timecodes
+    lo.geometry = {x = rjno1X + 10 * 26, y = rjno1Y + 10 * 5.1+ 20 / 2, an = 1, w = 110, h = 20}
+    lo.style = osc_styles.rjno120Buttons	
 
-    lo = add_layout("tc_right")
-    lo.geometry =
-        {x = posX + pos_offsetX, y = bottomrowY, an = 6, w = 110, h = 18}
-    lo.style = osc_styles.timecodes
-
+--an = 5
     lo = add_layout("cache")
-    lo.geometry =
-        {x = posX, y = bottomrowY, an = 5, w = 110, h = 18}
-    lo.style = osc_styles.timecodes
+    lo.geometry = {x = rjno1X + 10 * 50 + 10 * 11 / 2, y = rjno1Y + 10 * 5.1, an = 5, w = 110, h = 20}
+    lo.style = osc_styles.rjno120Buttons	
+--an = 9 这样右侧的时间变长才会往左，但y轴要调整
+    lo = add_layout("tc_right")
+    lo.geometry = {x = rjno1X + 10 * 78 + 10 * 11 / 2, y = rjno1Y + 10 * 5.1- 20 / 2 + 1, an = 9, w = 110, h = 20}
+    lo.style = osc_styles.rjno120Buttons	
+
+	
+	
+	
+	
+
+
+    lo = add_layout("cy_audio")
+    lo.geometry = {x = rjno1X + 10 * 85 + 10 * 7/2, y = rjno1Y + 10 * 5.1, an = 5, w = 70, h = 20}
+    lo.style = osc_styles.rjno120Buttons	
+
+    lo = add_layout("cy_sub")
+    lo.geometry = {x = rjno1X + 10 * 93 + 10 * 7/2, y = rjno1Y + 10 * 5.1, an = 5, w = 70, h = 20}
+    lo.style = osc_styles.rjno120Buttons	
+
+--an = 1 图标最左侧才能点击
+    lo = add_layout("volume")
+    lo.geometry = {x = rjno1X + 10 * 102 , y = rjno1Y + 10 * 5 + 13, an = 1, w = 30, h = 26}
+    lo.style = osc_styles.rjno125Buttons	
+--an = 1 图标最左侧才能点击
+    lo = add_layout("tog_fs")
+    lo.geometry = {x = rjno1X + 10 * 106, y = rjno1Y + 10 * 5 + 13 +1 , an = 1, w = 30, h =26 }
+    lo.style = osc_styles.rjno125Buttons
 
 end
 

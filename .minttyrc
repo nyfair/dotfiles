@@ -1,0 +1,15 @@
+BoldAsFont=no
+Font=Consolas
+Rows=40
+Columns=120
+FontHeight=12
+Transparency=off
+CursorType=line
+Locale=C
+Charset=UTF-8
+FontWeight=400
+FontIsBold=no
+BoldAsColour=no
+FontSmoothing=default
+Font1=Microsoft Yahei
+Background=*/arisa.jpg,30

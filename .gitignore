@@ -1,0 +1,11 @@
+*
+!.gitignore
+!.*rc
+!.*config
+!mpv
+!nginx
+!mpv/**
+!nginx/**
+mpv/vapoursynth64/coreplugins
+mpv/portable_config/fonts
+mpv/portable_config/shaders_cache

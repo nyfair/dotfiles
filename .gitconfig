@@ -1,0 +1,31 @@
+[core]
+	autocrlf = false
+[user]
+	name = nyfair
+	email = nyfair2012@gmail.com
+[color]
+	diff = always
+	branch = auto
+	status = auto
+	grep = always
+[push]
+	default = simple
+[alias]
+	a = add
+	b = branch
+	c = commit -m
+	d = diff
+	e = clone
+	f = fetch
+	i = init
+	l = log
+	m = merge
+	o = checkout
+	p = push
+	r = reset
+	s = status
+	t = tag
+	u = pull
+	v = rebase
+[status]
+	submoduleSummary = true

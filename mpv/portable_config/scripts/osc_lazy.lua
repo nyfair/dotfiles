@@ -9,16 +9,18 @@ COMMIT_ 20220720 7a9e348
 SHIFT+DEL  script-binding osc_lazy/visibility  # 切换osc_lazy的可见性
 --]]
 
-local orig_osc = mp.get_property('osc')
-if orig_osc == 'yes' then
-    local err = "_____\n{\\1c&H0000FF&}注意：\n必须设置 {\\1c&H0000FF&}osc=no\n打开控制台查看更多信息"
-    mp.set_osd_ass(1280, 720, err)
-    mp.set_property('osc', 'no')
-    mp.msg.warn("脚本已自动执行 osc=no 以临时兼容")
-    mp.msg.warn("正确编辑 mpv.conf 重启程序即可")
-    mp.msg.warn("不要在运行中更改参数 --osc 的状态")
-    mp.msg.warn("注意其它osc类脚本亦不应共存")
+function lock_osc(_, value)
+    local info = "检测到原OSC的启用！"
+    if value == true then
+        mp.set_property("osc", "no")
+        mp.msg.warn(info)
+        local osm = mp.create_osd_overlay("ass-events")
+        osm.data = "{\\1c&H0099FF&\\an9}" .. info
+        osm:update()
+        mp.add_timeout(3, function() osm:remove() end)
+    end
 end
+mp.observe_property("osc", "bool", lock_osc)
 
 local ipairs,loadfile,pairs,pcall,tonumber,tostring = ipairs,loadfile,pairs,pcall,tonumber,tostring
 local debug,io,math,os,string,table,utf8 = debug,io,math,os,string,table,utf8
@@ -92,6 +94,7 @@ local user_opts = {
     showonpause = false,                -- 在暂停时常驻 OSC
     showonstart = false,                -- 在播放开始或当播放下一个文件时显示 OSC
     showonseek = false,                 -- 在跳转时显示 OSC
+    shadowsize = 180,                   -- bottombox布局的底部阴影尺寸
     font = "sans",                      -- OSC的全局字体显示
     font_mono = "sans",
     font_bold = 500,
@@ -593,7 +596,7 @@ local osc_styles = {
     bb_bigButton1 =  "{\\blur0.25\\bord0\\1c&HF2A823\\3c&HFFFFFF\\fs50\\fnmpv-osd-symbols}",
     bb_bigButton2 =  "{\\blur0.25\\bord0\\1c&HFACE87\\3c&HFFFFFF\\fs26\\fnmpv-osd-symbols}",
     bb_bigButton3 =  "{\\blur0.25\\bord0\\1c&H9A530E\\3c&HFFFFFF\\fs34\\fnmpv-osd-symbols}",
-    bb_backgroud  =  "{\\blur100\\bord180\\1c&H000000&\\3c&H000000&}",
+    bb_backgroud  =  "{\\blur100\\bord" .. user_opts.shadowsize .. "\\1c&H000000&\\3c&H000000&}",
     bb_Atracks    =  "{\\blur0\\bord0\\1c&H73CBEF\\3c&HFFFFFF\\fs24\\fnmpv-osd-symbols}",
     bb_Stracks    =  "{\\blur0\\bord0\\1c&H70DC57\\3c&HFFFFFF\\fs24\\fnmpv-osd-symbols}",
     bb_volume     =  "{\\blur0\\bord0\\1c&H00F0FF\\3c&HFFFFFF\\fs30\\fnmpv-osd-symbols}",

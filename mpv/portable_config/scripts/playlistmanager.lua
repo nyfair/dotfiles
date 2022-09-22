@@ -1,6 +1,5 @@
 --[[
-SOURCE_ https://github.com/jonniek/mpv-playlistmanager
-COMMIT_ 20220720 f0a207e
+SOURCE_ https://github.com/jonniek/mpv-playlistmanager/commit/07393162f7f78f8188e976f616f1b89813cec741
 
 高级播放列表，用于替换内置的过于简洁的列表
 自定义快捷键方案示例，在 input.conf 中另起一行：
@@ -16,7 +15,7 @@ local settings = {
   --if "no" then you can display the playlist by any of the navigation keys
   dynamic_binds = true,
 
-  -- to bind multiple keys separate them by a space
+  -- dynamic keys - to bind multiple keys separate them by a space
   key_moveup = "UP",
   key_movedown = "DOWN",
   key_movepageup = "PGUP",
@@ -76,10 +75,8 @@ local settings = {
 
   --loadfiles at startup if 1 or more items in playlist
   loadfiles_on_start = false,
-
   -- loadfiles from working directory on idle startup
   loadfiles_on_idle_start = false,
-
   --always put loaded files after currently playing file
   loadfiles_always_append = false,
 
@@ -130,6 +127,9 @@ local settings = {
 
   --call youtube-dl to resolve the titles of urls in the playlist
   resolve_titles = false,
+
+  -- timeout in seconds for title resolving
+  resolve_title_timeout = 15,
 
   --osd timeout on inactivity, with high value on this open_toggles is good to be true
   playlist_display_timeout = 5,
@@ -190,7 +190,6 @@ local settings = {
 
   -- reset cursor navigation when playlist is not visible
   reset_cursor_on_close = true,
-
 }
 local opts = require("mp.options")
 opts.read_options(settings, nil, function(list) update_opts(list) end)
@@ -830,8 +829,10 @@ function save_playlist(filename)
       if not filename:match("^%a%a+:%/%/") then
         fullpath = utils.join_path(pwd, filename)
       end
-      local title = mp.get_property('playlist/'..i..'/title')
-      if title then file:write("#EXTINF:,"..title.."\n") end
+      local title = mp.get_property('playlist/'..i..'/title') or url_table[filename]
+      if title then
+        file:write("#EXTINF:,"..title.."\n")
+      end
       file:write(fullpath, "\n")
       i=i+1
     end
@@ -1074,7 +1075,7 @@ function resolve_titles()
             end
           end)
 
-      mp.add_timeout(5, function()
+      mp.add_timeout(settings.resolve_title_timeout, function()
         mp.abort_async_command(req)
       end)
 
@@ -1112,12 +1113,12 @@ end
 
 mp.register_script_message("playlistmanager", handlemessage)
 
-mp.add_key_binding(nil, "sortplaylist", sortplaylist)
-mp.add_key_binding(nil, "shuffleplaylist", shuffleplaylist)
-mp.add_key_binding(nil, "reverseplaylist", reverseplaylist)
-mp.add_key_binding(nil, "loadfiles", playlist)
-mp.add_key_binding(nil, "saveplaylist", activate_playlist_save)
-mp.add_key_binding(nil, "showplaylist", toggle_playlist)
-
 mp.register_event("file-loaded", on_loaded)
 mp.register_event("end-file", on_closed)
+
+mp.add_key_binding(nil,  "loadfiles",        playlist)
+mp.add_key_binding(nil,  "sortplaylist",     sortplaylist)
+mp.add_key_binding(nil,  "saveplaylist",     activate_playlist_save)
+mp.add_key_binding(nil,  "showplaylist",     toggle_playlist)
+mp.add_key_binding(nil,  "shuffleplaylist",  shuffleplaylist)
+mp.add_key_binding(nil,  "reverseplaylist",  reverseplaylist)

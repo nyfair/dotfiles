@@ -1,5 +1,5 @@
 ### 使用nnedi3算法进行两倍放大
-### 追求速度应使用着色器版本，例如 ../shaders/nnedi3-nns128-win8x4.glsl
+### 追求速度应使用着色器版本，例如 ../shaders/nnedi3_nns128_win8x4.glsl
 
 import vapoursynth as vs
 from vapoursynth import core

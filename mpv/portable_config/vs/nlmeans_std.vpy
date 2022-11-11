@@ -1,4 +1,5 @@
 ### NL-means降噪
+### 追求速度应使用着色器版本，例如 ../shaders/nlmeans.glsl
 
 import vapoursynth as vs
 from vapoursynth import core

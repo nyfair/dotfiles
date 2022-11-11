@@ -1,4 +1,4 @@
-### BM3D降噪
+### BM3D降噪，显卡加速版仅限N卡专用
 
 import vapoursynth as vs
 from vapoursynth import core

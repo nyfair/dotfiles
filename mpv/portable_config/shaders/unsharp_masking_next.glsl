@@ -1,11 +1,15 @@
-// only necessary in --vo=gpu-next
-// use --sharp=1 instead via --vo=gpu
+// only useful in --vo=gpu-next
+// use --sharp instead in --vo=gpu
 
-//!DESC unsharp-masking_sharpen
+//!PARAM SHARP
+//!TYPE float
+//!MINIMUM -10
+//!MAXIMUM 10
+1
+
+//!DESC unsharp_masking_next
 //!HOOK MAIN
 //!BIND HOOKED
-
-#define SHARPEN 1.0   // terrible when over 3
 
 vec4 hook()
 {
@@ -21,6 +25,6 @@ vec4 hook()
               + HOOKED_texOff(st2 * vec2(-1,  0))
               + HOOKED_texOff(st2 * vec2( 0, -1));
     vec4 t = p * 0.859375 + sum2 * -0.1171875 + sum1 * -0.09765625;
-    return p + t * SHARPEN;
+    return p + t * SHARP;
 }
 

@@ -1,6 +1,6 @@
 --[[
 SOURCE_ https://github.com/po5/thumbfast/blob/master/thumbfast.lua
-COMMIT_ a145b37dc296837a4e48dff68beeeefc674c9bb3
+COMMIT_ 08d81035bb5020f4caa326e642341f2e8af00ffe
 
 适配多个OSC类脚本的新缩略图引擎
 ]]--
@@ -147,7 +147,7 @@ local client_script = [=[
 MPV_IPC_FD=0; MPV_IPC_PATH="%s"
 trap "kill 0" EXIT
 while [[ $# -ne 0 ]]; do case $1 in --mpv-ipc-fd=*) MPV_IPC_FD=${1/--mpv-ipc-fd=/} ;; esac; shift; done
-if echo "print-text thumbfast" >&"$MPV_IPC_FD"; then echo -n > "$MPV_IPC_PATH"; tail -f "$MPV_IPC_PATH" >&"$MPV_IPC_FD" & while read -r -u "$MPV_IPC_FD"; do :; done; fi
+if echo "print-text thumbfast" >&"$MPV_IPC_FD"; then echo -n > "$MPV_IPC_PATH"; tail -f "$MPV_IPC_PATH" >&"$MPV_IPC_FD" & while read -r -u "$MPV_IPC_FD" 2>/dev/null; do :; done; fi
 ]=]
 
 local function get_os()

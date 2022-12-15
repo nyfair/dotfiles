@@ -19,7 +19,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-//cfg_desc (this is the main shader)
+// Profile description: Slow, but higher quality. Tuned for heavy noise.
 
 /* The recommended usage of this shader and its variants is to add them to 
  * input.conf and then dispatch the appropriate shader via a keybind during 
@@ -103,7 +103,7 @@ vec4 hook()
 //!BIND RF
 //!BIND RF_LUMA
 //!BIND EP_LUMA
-//!DESC Non-local means
+//!DESC Non-local means (nlmeans_hq_heavy.glsl)
 
 /* User variables
  *
@@ -123,11 +123,11 @@ vec4 hook()
  * slower and offer diminishing returns.
  */
 #ifdef LUMA_raw
-#define S 1.25
-#define P 3
-#define R 5
+#define S 3
+#define P 4
+#define R 7
 #else
-#define S 1.50
+#define S 3
 #define P 3
 #define R 5
 #endif
@@ -169,11 +169,11 @@ vec4 hook()
  * WDP (WD=1): Higher numbers reduce the threshold more for small sample sizes
  */
 #ifdef LUMA_raw
-#define WD 1
+#define WD 2
 #define WDT 0.875
 #define WDP 6.0
 #else
-#define WD 1
+#define WD 2
 #define WDT 0.875
 #define WDP 6.0
 #endif
@@ -231,10 +231,10 @@ vec4 hook()
  */
 #ifdef LUMA_raw
 #define RS 3
-#define PS 4
+#define PS 6
 #else
 #define RS 3
-#define PS 4
+#define PS 3
 #endif
 
 /* Rotational/reflectional invariance
@@ -254,7 +254,7 @@ vec4 hook()
  * RFI: Reflectional invariance
  */
 #ifdef LUMA_raw
-#define RI 0
+#define RI 3
 #define RFI 0
 #else
 #define RI 0
@@ -345,9 +345,9 @@ vec4 hook()
  * EPSILON may be used in place of zero to avoid divide-by-zero errors.
  */
 #ifdef LUMA_raw
-#define SW 1.0
+#define SW EPSILON
 #else
-#define SW 1.0
+#define SW EPSILON
 #endif
 
 /* Patch donut

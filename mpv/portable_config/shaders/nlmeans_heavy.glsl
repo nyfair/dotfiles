@@ -19,7 +19,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-//cfg_desc (this is the main shader)
+// Profile description: Tuned for heavy noise.
 
 /* The recommended usage of this shader and its variants is to add them to 
  * input.conf and then dispatch the appropriate shader via a keybind during 
@@ -103,7 +103,7 @@ vec4 hook()
 //!BIND RF
 //!BIND RF_LUMA
 //!BIND EP_LUMA
-//!DESC Non-local means
+//!DESC Non-local means (nlmeans_heavy.glsl)
 
 /* User variables
  *
@@ -345,9 +345,9 @@ vec4 hook()
  * EPSILON may be used in place of zero to avoid divide-by-zero errors.
  */
 #ifdef LUMA_raw
-#define SW 1.0
+#define SW EPSILON
 #else
-#define SW 1.0
+#define SW EPSILON
 #endif
 
 /* Patch donut

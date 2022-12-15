@@ -19,7 +19,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-//cfg_desc (this is the main shader)
+// Profile description: Somewhat fast, significantly worse quality. Primarily for very old/weak GPUs.
 
 /* The recommended usage of this shader and its variants is to add them to 
  * input.conf and then dispatch the appropriate shader via a keybind during 
@@ -103,7 +103,7 @@ vec4 hook()
 //!BIND RF
 //!BIND RF_LUMA
 //!BIND EP_LUMA
-//!DESC Non-local means
+//!DESC Non-local means (nlmeans_lq.glsl)
 
 /* User variables
  *
@@ -123,13 +123,13 @@ vec4 hook()
  * slower and offer diminishing returns.
  */
 #ifdef LUMA_raw
-#define S 1.25
-#define P 3
-#define R 5
+#define S 5
+#define P 1
+#define R 3
 #else
 #define S 1.50
-#define P 3
-#define R 5
+#define P 1
+#define R 3
 #endif
 
 /* Adaptive sharpening
@@ -317,7 +317,7 @@ vec4 hook()
  * factor is set to 3.
  */
 #ifdef LUMA_raw
-#define RF 0
+#define RF 1
 #else
 #define RF 1
 #endif

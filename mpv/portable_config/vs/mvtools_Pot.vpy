@@ -3,23 +3,27 @@
 import vapoursynth as vs
 from vapoursynth import core
 
-# skip motion interpolation completely for content exceeding the limits below
+############
+# 用户选项 #
+############
+
+## skip motion interpolation completely for content exceeding the limits below
 max_width  = 1920
 max_height = 1200
 max_fps    = 60
-# use BlockFPS instead of FlowFPS for content exceeding the limits below
+## use BlockFPS instead of FlowFPS for content exceeding the limits below
 max_flow_width  = 1280
 max_flow_height = 720
-# a block is considered as changed when 8*8*x > th_block|flow_diff with 8*8
-# being the size of a block (scaled internally) and x the difference of each
-# pixel within this block, default 400
+## a block is considered as changed when 8*8*x > th_block|flow_diff with 8*8
+## being the size of a block (scaled internally) and x the difference of each
+## pixel within this block, default 400
 th_block_diff = 8*8*7
 th_flow_diff  = 8*8*7
-# (threshold/255)% blocks have to change to consider this a scene change
-# (= no motion compensation), default 130
+## (threshold/255)% blocks have to change to consider this a scene change
+## (= no motion compensation), default 130
 th_block_changed = 14
 th_flow_changed  = 14
-# size of blocks the analyse step is performed on
+## size of blocks the analyse step is performed on
 blocksize  = 2**4
 
 

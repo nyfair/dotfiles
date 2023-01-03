@@ -8,4 +8,4 @@
 !nginx/**
 mpv/vapoursynth64/coreplugins
 mpv/portable_config/fonts
-mpv/portable_config/shaders_cache
+mpv/portable_config/*_cache

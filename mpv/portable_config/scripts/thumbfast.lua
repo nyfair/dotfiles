@@ -21,6 +21,7 @@ local options = {
     hwdec = true,          -- 启用硬解加速
     direct_io = true,      -- Windows only: use native Windows API to write to pipe (requires LuaJIT)
 
+    binpath = "mpv",       -- 自定义mpv路径
     min_duration = 0,      -- 对短视频关闭预览（秒）
     precise = "auto",      -- 预览精度
     frequency = 0.1,       -- 解码频率（秒）
@@ -231,9 +232,9 @@ if options.direct_io then
     end
 end
 
-local mpv_path = "mpv"
+local mpv_path = options.binpath
 
-if os_name == "Mac" and unique then
+if os_name == "Mac" and options.binpath == "bundle" and unique then
     mpv_path = string.gsub(subprocess({"ps", "-o", "comm=", "-p", tostring(unique)}).stdout, "[\n\r]", "")
     mpv_path = string.gsub(mpv_path, "/mpv%-bundle$", "/mpv")
 end
@@ -596,8 +597,10 @@ local function file_load()
 
     spawned = false
     if options.spawn_first then
-        spawn(mp.get_property_number("time-pos", 0))
-        first_file = true
+        mp.add_timeout(0.1, function()
+            spawn(mp.get_property_number("time-pos", 0))
+            first_file = true
+        end)
     end
 end
 

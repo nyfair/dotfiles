@@ -1,5 +1,5 @@
 ### 镜头防抖（此类问题常见于胶片转录作品），CPU开销很大
-### port from HAvsFunc (ee55cfaea1a704c33fdfc33f2a19f76cc7af6716)
+### port from HAvsFunc (7f0a9a7a37b60a05b9f408024d203e511e544a61)
 
 import vapoursynth as vs
 from vapoursynth import core

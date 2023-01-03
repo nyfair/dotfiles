@@ -7,15 +7,19 @@ from nnedi3_resample import nnedi3_resample
 
 input = video_in
 
-edi_nsize = 4
-edi_nns = 3
-edi_core = "znedi3"
-GPU = -1
-# 4：8x4 // 5：16x4 // 6：32x4
-# 2：64  // 3：128  // 4：256
-# "znedi3" // "nnedi3" // "nnedi3cl"
-# 仅nnedi3cl支持显卡加速
+############
+# 用户选项 #
+############
 
-output = nnedi3_resample(input=input, target_width=input.width * 2, target_height=input.height * 2, nsize=edi_nsize, nns=edi_nns, mode=edi_core, device=GPU)
+Edi_nsize = 4
+Edi_nns = 3
+Edi_core = "znedi3"
+GPU = -1
+## 4：8x4 // 5：16x4 // 6：32x4
+## 2：64  // 3：128  // 4：256
+## "znedi3" // "nnedi3" // "nnedi3cl"
+## 仅nnedi3cl支持显卡加速
+
+output = nnedi3_resample(input=input, target_width=input.width * 2, target_height=input.height * 2, nsize=Edi_nsize, nns=Edi_nns, mode=Edi_core, device=GPU)
 
 output.set_output()

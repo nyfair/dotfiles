@@ -6,12 +6,14 @@ from vapoursynth import core
 
 input = video_in
 colorlv = input.get_frame(0).props._ColorRange
-pix_fmt = input.format.id
+fmt_in = input.format.id
 
-denoise_lv = 30
-fmt_out = vs.YUV444P8
-# 彩噪阈值，越高的值降噪效果越明显（涂抹越重）
-# 输出格式 vs.YUV420P8（最优化性能） // pix_fmt（同源） // vs.YUV444P16（最小化精度损失）
+############
+# 用户选项 #
+############
+
+Denoise_lv = 30
+## 彩噪阈值，越高的值降噪效果越明显（涂抹越重）
 
 def ccd(src: vs.VideoNode, threshold: float = 4) -> vs.VideoNode:
     """
@@ -60,8 +62,8 @@ def ccd(src: vs.VideoNode, threshold: float = 4) -> vs.VideoNode:
 
     return ex_ccd
 
-cut = input.resize.Bilinear(format=vs.RGBS, matrix_in_s="709")
-fin = ccd(src=cut, threshold=denoise_lv)
-output = fin.resize.Bilinear(format=fmt_out, matrix_s="709", range=1 if colorlv==0 else None)
+cut = core.resize.Bilinear(clip=input, format=vs.RGBS, matrix_in_s="709")
+fin = ccd(src=cut, threshold=Denoise_lv)
+output = core.resize.Bilinear(clip=fin, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
 
 output.set_output()

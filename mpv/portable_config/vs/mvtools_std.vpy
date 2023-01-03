@@ -7,8 +7,12 @@ from vapoursynth import core
 input = video_in
 vs_api = vs.__api_version__.api_major
 
+############
+# 用户选项 #
+############
+
 FPS_target = 60
-# 目标帧率，示例即约60fps。特殊值比如 display_fps/2 即目标为显示器刷新率的一半帧率，填 container_fps*2 即倍帧（越高的帧率增加耗能，产生更多伪影，通常是不必要的。例如对于144hz的显示器来说，最多只需要补到72fps，剩下的可让 --interpolation 帧混成补偿）
+## 目标帧率，示例即约60fps。特殊值比如 display_fps/2 即目标为显示器刷新率的一半帧率；填 container_fps*2 即倍帧（越高的帧率增加耗能，产生更多伪影，通常是不必要的。例如对于144hz的显示器来说，最多只需要补到72fps，剩下的可让 --interpolation 帧混成补偿）
 
 if container_fps > 32 :
 	raise Exception("源帧率超过限制的范围，已临时禁用该脚本。")

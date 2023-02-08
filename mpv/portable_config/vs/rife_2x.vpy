@@ -13,12 +13,10 @@ fmt_src = input.format
 ############
 
 Max_Leng = 720
-Scene_th = 0.1
 GPU = 0
 GPU_t = 2
 Static_th = 60.0
 ## 若视频的短边超过该长度将被强制降采样，以画质交换性能
-## 场景切换的检测阈值，初始设置保守，设置为 0.2 可获得更明显的效果但引入更多瑕疵
 ## 使用的显卡序号，0为排序一号
 ## 使用的显卡线程数
 ## 静止帧的检测阈值，不对该类帧进行补偿计算
@@ -43,7 +41,7 @@ if fmt_src.subsampling_w or fmt_src.subsampling_h :
 	if not (h_ds % 2 == 0) :
 		h_ds = math.floor(h_ds / 2) * 2
 
-cut0 = core.misc.SCDetect(clip=input, threshold=Scene_th)
+cut0 = core.misc.SCDetect(clip=input, threshold=0.15)
 
 if short_edge > Max_Leng :
 	cut1 = core.resize.Bicubic(clip=cut0, width=w_ds, height=h_ds, format=vs.RGBS, matrix_in_s="709")

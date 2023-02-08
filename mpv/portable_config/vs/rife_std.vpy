@@ -23,7 +23,7 @@ GPU_t = 2
 if container_fps > 32 :
 	raise Exception("源帧率超过限制的范围，已临时禁用该脚本。")
 
-cut0 = core.misc.SCDetect(clip=input, threshold=0.2)
+cut0 = core.misc.SCDetect(clip=input, threshold=0.15)
 
 cut1 = core.resize.Bilinear(clip=cut0, format=vs.RGBS, matrix_in_s="709")
 cut2 = core.rife.RIFE(clip=cut1, model=9, factor_num=FPS_num, factor_den=FPS_den, gpu_id=GPU, gpu_thread=GPU_t, sc=True, skip=True, skip_threshold=60.0)

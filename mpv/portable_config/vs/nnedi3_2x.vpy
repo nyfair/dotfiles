@@ -13,13 +13,13 @@ input = video_in
 
 Edi_nsize = 4
 Edi_nns = 3
-Edi_core = "znedi3"
+CPU = True
 GPU = -1
-## 4：8x4 // 5：16x4 // 6：32x4
-## 2：64  // 3：128  // 4：256
-## "znedi3" // "nnedi3" // "nnedi3cl"
-## 仅nnedi3cl支持显卡加速
+## 0： 8x6 // 4： 8x4
+## 2： 64  // 3： 128  // 4： 256
+## 使用cpu还是gpu
+## 使用gpu时指定的显卡序号
 
-output = nnedi3_resample(input=input, target_width=input.width * 2, target_height=input.height * 2, nsize=Edi_nsize, nns=Edi_nns, mode=Edi_core, device=GPU)
+output = nnedi3_resample(input=input, target_width=input.width * 2, target_height=input.height * 2, nsize=Edi_nsize, nns=Edi_nns, mode="znedi3" if CPU else "nnedi3cl", device=GPU)
 
 output.set_output()

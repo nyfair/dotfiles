@@ -3,6 +3,10 @@ SOURCE_ https://github.com/po5/thumbfast/blob/master/thumbfast.lua
 COMMIT_ 08d81035bb5020f4caa326e642341f2e8af00ffe
 
 适配多个OSC类脚本的新缩略图引擎
+
+示例在 input.conf 中写入：
+CTRL+t   script-binding thumbfast/toggle   # 临时显示/隐藏缩略图
+
 ]]--
 
 local options = {
@@ -25,6 +29,7 @@ local options = {
     min_duration = 0,      -- 对短视频关闭预览（秒）
     precise = "auto",      -- 预览精度
     frequency = 0.1,       -- 解码频率（秒）
+    auto_run = true,       -- 自动运行
 
 }
 
@@ -257,6 +262,8 @@ end
 
 local info_timer = nil
 
+local auto_run = options.auto_run
+
 local function info(w, h)
     local display_w, display_h = w, h
 
@@ -270,6 +277,10 @@ local function info(w, h)
         (albumart and not options.audio) or
         (image and not albumart) or
         (short_video and options.min_duration > 0)
+
+    if not auto_run then
+        disabled = true
+    end
 
     if info_timer then
         info_timer:kill()
@@ -623,3 +634,14 @@ mp.register_script_message("clear", clear)
 
 mp.register_event("file-loaded", file_load)
 mp.register_event("shutdown", shutdown)
+
+mp.add_key_binding(nil, "toggle", function()
+    if auto_run then
+        auto_run = false
+        mp.osd_message("缩略图功能已临时禁用", 2)
+    else
+        auto_run = true
+        mp.osd_message("缩略图功能已临时启用", 2)
+    end
+    file_load()
+end)

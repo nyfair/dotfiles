@@ -30,7 +30,7 @@
 
 //!HOOK LUMA
 //!BIND HOOKED
-//!DESC Contrast Adaptive Sharpening [0410] luma
+//!DESC (AMD_CAS_lite_luma)
 
 #define CONTRAST   0.4  // Adjusts the range the shader adapts to high contrast (0 is not all the way off).  Higher values = more high contrast sharpening.
 #define SHARPENING 1.0  // Adjusts sharpening intensity by averaging the original pixels to the sharpened result.

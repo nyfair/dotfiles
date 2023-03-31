@@ -1,8 +1,8 @@
-### waifu2x (upconv_7_anime_style_art_rgb) 放大或降噪，性能要求非常高，N卡专用
+### Real-CUGAN (pro) 放大，性能要求超级高，N卡专用
 
 import vapoursynth as vs
 from vapoursynth import core
-from vsmlrt import Waifu2x, BackendV2
+from vsmlrt import CUGAN, BackendV2
 
 input = video_in
 w_in, h_in = input.width, input.height
@@ -15,16 +15,14 @@ fmt_in = input.format.id
 ############
 
 Lt_HD = False
-Noise = 1
-Scale = 2
+Noise = -1
 GPU = 0
 GPU_t = 2
 St_eng = False
 WS_size = 0
 Lk_fmt = False
 ## 是否对超过HD分辨率（720P）的源进行处理
-## <-1|0|1|2|3> 降噪等级，-1为不降噪
-## <1|2> 放大倍率，1为不放大
+## <-1|0|3> 降噪等级，-1为不降噪
 ## 使用的显卡序号，0为排序一号
 ## <1|2> 使用的显卡线程数
 ## 是否使用静态引擎（需要对不同分辨率的源各进行预处理）；动态引擎自适应不同分辨率（64²→DCI2K）
@@ -41,7 +39,7 @@ if fmt_in not in [vs.YUV410P8, vs.YUV411P8, vs.YUV420P8, vs.YUV422P8, vs.YUV444P
 	fmt_out = vs.YUV420P10
 
 cut1 = input.resize.Bilinear(format=vs.RGBH, matrix_in_s="709")
-cut2 = Waifu2x(clip=cut1, noise=Noise, scale=Scale, model=3, backend=BackendV2.TRT(
+cut2 = CUGAN(clip=cut1, noise=Noise, scale=2, version=2, backend=BackendV2.TRT(
 	num_streams=GPU_t, force_fp16=True, output_format=1,
 	workspace=None if WS_size < 128 else (WS_size if St_eng else WS_size * 2),
 	use_cuda_graph=True, use_cublas=False, use_cudnn=False,

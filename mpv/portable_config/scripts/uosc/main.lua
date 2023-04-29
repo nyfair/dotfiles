@@ -1,11 +1,12 @@
 --[[
 SOURCE_ https://github.com/tomasklaen/uosc/tree/main/scripts
-COMMIT_ 19f421f67c2b3ac4d388d060164c628566c8b0fe
+COMMIT_ ec52252380f896ca709216307e3bf021fbee914b
+文档_ https://github.com/hooke007/MPV_lazy/discussions/186
 
 极简主义设计驱动的多功能界面脚本群组，兼容 thumbfast 新缩略图引擎
-]]--
+]]
 
-local uosc_version = '4.6.0'
+local uosc_version = '4.7.0'
 
 require('lib/std')
 assdraw = require('mp.assdraw')
@@ -15,6 +16,7 @@ msg = require('mp.msg')
 osd = mp.create_osd_overlay('ass-events')
 INFINITY = 1e309
 QUARTER_PI_SIN = math.sin(math.pi / 4)
+require('lib/lang')
 
 --[[ OPTIONS ]]
 
@@ -30,12 +32,12 @@ defaults = {
 	timeline_start_hidden = false,
 	timeline_opacity = 0.9,
 	timeline_border = 1,
-	timeline_step = 5,
+	timeline_step = 1,
 	timeline_chapters_opacity = 0.8,
 	timeline_cache = true,
 	timeline_persistency = 'idle,audio',
 
-	controls = 'menu,script-stats,gap,play_pause,gap,subtitles,audio,<has_chapter>chapters,<has_many_edition>editions,<has_many_video>video,<stream>stream-quality,gap,space,speed,space,shuffle,loop-playlist,loop-file,gap,prev,items,next,gap,fullscreen',
+	controls = 'menu,ST-stats_tog,gap,play_pause,gap,subtitles,audio,<has_chapter>chapters,<has_many_edition>editions,<has_many_video>video,<stream>stream-quality,gap,space,speed,space,shuffle,loop-playlist,loop-file,gap,prev,items,next,gap,fullscreen',
 	controls_size = 32,
 	controls_size_fullscreen = 40,
 	controls_margin = 8,
@@ -72,7 +74,7 @@ defaults = {
 	top_bar_title_opacity = 0.8,
 	top_bar_persistency = 'idle,audio',
 
-	window_border_size = 1,
+	window_border_size = 2,
 	window_border_opacity = 0.8,
 
 	autoload = false,
@@ -106,11 +108,12 @@ defaults = {
 	subtitle_types = 'aqt,ass,gsub,idx,jss,lrc,mks,pgs,pjs,psb,rt,slt,smi,sub,sup,srt,ssa,ssf,ttxt,txt,usf,vt,vtt',
 	default_directory = '~/',
 	use_trash = false,
+	adjust_osd_margins = false,
 	chapter_ranges = 'openings:30abf964,endings:30abf964,ads:c54e4e80',
 	chapter_range_patterns = 'openings:オープニング;endings:エンディング',
 
 	idle_call_menu = 0,                       -- 空闲自动弹出上下文菜单
-	custom_font = '',                         -- 自定义界面字体
+	custom_font = 'default',                  -- 自定义界面字体
 }
 options = table_shallow_copy(defaults)
 opt.read_options(options)
@@ -148,39 +151,39 @@ end
 -- 上下文菜单的默认内容
 local function create_default_menu()
 	return {
-		{title = '加载', items = {
-			{title = '※ 文件浏览器', value = 'script-binding uosc/open-file'},
-			{title = '※ 导入 字幕轨', value = 'script-binding uosc/load-subtitles'},
+		{title = lang._load, items = {
+			{title = lang._file_browser, value = 'script-binding uosc/open-file'},
+			{title = lang._import_sid, value = 'script-binding uosc/load-subtitles'},
 		},},
-		{title = '导航', items = {
-			{title = '※ 播放列表', value = 'script-binding uosc/playlist'},
-			{title = '※ 版本列表', value = 'script-binding uosc/editions'},
-			{title = '※ 章节列表', value = 'script-binding uosc/chapters'},
-			{title = '※ 视频轨列表', value = 'script-binding uosc/video'},
-			{title = '※ 音频轨列表', value = 'script-binding uosc/audio'},
-			{title = '※ 字幕轨列表', value = 'script-binding uosc/subtitles'},
-			{title = '播放列表乱序重排', value = 'playlist-shuffle'},
+		{title = lang._navigation, items = {
+			{title = lang._playlist, value = 'script-binding uosc/playlist'},
+			{title = lang._edition_list, value = 'script-binding uosc/editions'},
+			{title = lang._chapter_list, value = 'script-binding uosc/chapters'},
+			{title = lang._vid_list, value = 'script-binding uosc/video'},
+			{title = lang._aid_list, value = 'script-binding uosc/audio'},
+			{title = lang._sid_list, value = 'script-binding uosc/subtitles'},
+			{title = lang._playlist_shuffle, value = 'playlist-shuffle'},
 		},},
-		{title = '※ 截屏', value = 'script-binding uosc/shot'},
-		{title = '视频', items = {
-			{title = '切换 解码模式', value = 'cycle-values hwdec no auto auto-copy'},
-			{title = '切换 去色带状态', value = 'cycle deband'},
-			{title = '切换 去隔行状态', value = 'cycle deinterlace'},
-			{title = '切换 自动校色', value = 'cycle icc-profile-auto'},
-			{title = '切换 时间码解析模式', value = 'cycle correct-pts'},
+		{title = lang._ushot, value = 'script-binding uosc/shot'},
+		{title = lang._VIDEO, items = {
+			{title = lang._decoding_api, value = 'cycle-values hwdec no auto auto-copy'},
+			{title = lang._deband_toggle, value = 'cycle deband'},
+			{title = lang._deint_toggle, value = 'cycle deinterlace'},
+			{title = lang._icc_toggle, value = 'cycle icc-profile-auto'},
+			{title = lang._corpts_toggle, value = 'cycle correct-pts'},
 		},},
-		{title = '工具', items = {
-			{title = '开关 常驻统计信息', value = 'script-binding display-stats-toggle'},
-			{title = '显示控制台', value = 'script-binding console/enable'},
-			{title = '切换 窗口边框', value = 'cycle border'},
-			{title = '切换 窗口置顶', value = 'cycle ontop'},
-			{title = '※ 音频输出设备列表', value = 'script-binding uosc/audio-device'},
-			{title = '※ 流式传输品质', value = 'script-binding uosc/stream-quality'},
-			{title = '※ 打开 当前文件所在路径', value = 'script-binding uosc/show-in-directory'},
-			{title = '※ 打开 设置目录', value = 'script-binding uosc/open-config-directory'},
+		{title = lang._TOOLS, items = {
+			{title = lang._stats_toggle, value = 'script-binding display-stats-toggle'},
+			{title = lang._console_on, value = 'script-binding console/enable'},
+			{title = lang._border_toggle, value = 'cycle border'},
+			{title = lang._ontop_toggle, value = 'cycle ontop'},
+			{title = lang._audio_device, value = 'script-binding uosc/audio-device'},
+			{title = lang._stream_quality, value = 'script-binding uosc/stream-quality'},
+			{title = lang._show_file_dir, value = 'script-binding uosc/show-in-directory'},
+			{title = lang._show_config_dir, value = 'script-binding uosc/open-config-directory'},
 		},},
-		{title = '停止', value = 'stop'},
-		{title = '退出mpv', value = 'quit'},
+		{title = lang._stop, value = 'stop'},
+		{title = lang._quit, value = 'quit'},
 	}
 end
 
@@ -189,7 +192,19 @@ config = {
 	-- sets max rendering frequency in case the
 	-- native rendering frequency could not be detected
 	render_delay = 1 / 60,
-	font = options.custom_font or mp.get_property('options/osd-font'),
+	font = (function()
+			local font_osd = mp.get_property_native('options/osd-font')
+			local font_u = options.custom_font
+			if font_u ~= 'default' then
+				return font_u
+			else
+				return font_osd
+			end
+	end)(),
+	osd_margin_x = mp.get_property('osd-margin-x'),
+	osd_margin_y = mp.get_property('osd-margin-y'),
+	osd_alignment_x = mp.get_property('osd-align-x'),
+	osd_alignment_y = mp.get_property('osd-align-y'),
 	types = {
 		video = split(options.video_types, ' *, *'),
 		audio = split(options.audio_types, ' *, *'),
@@ -322,8 +337,8 @@ cursor = {
 	hidden = true,
 	hover_raw = false,
 	-- Event handlers that are only fired on cursor, bound during render loop. Guidelines:
-	-- - element activations (clicks) go to `mbtn_left_down` handler
-	-- - `mbtn_button_up` is only for clearing dragging/swiping
+	-- - element activations (clicks) go to `on_primary_down` handler
+	-- - `on_primary_up` is only for clearing dragging/swiping, and prevents autohide when bound
 	on_primary_down = nil,
 	on_primary_up = nil,
 	on_wheel_down = nil,
@@ -333,12 +348,35 @@ cursor = {
 		cursor.on_primary_down, cursor.on_primary_up = nil, nil
 		cursor.on_wheel_down, cursor.on_wheel_up = nil, nil
 	end,
+	mbtn_left_enabled = nil,
+	wheel_enabled = nil,
 	-- Enables pointer key group captures needed by handlers (called at the end of each render)
 	decide_keybinds = function()
-		local mbtn_left_decision = (cursor.on_primary_down or cursor.on_primary_up) and 'enable' or 'disable'
-		local wheel_decision = (cursor.on_wheel_down or cursor.on_wheel_up) and 'enable' or 'disable'
-		mp[mbtn_left_decision .. '_key_bindings']('mbtn_left')
-		mp[wheel_decision .. '_key_bindings']('wheel')
+		local enable_mbtn_left = (cursor.on_primary_down or cursor.on_primary_up) ~= nil
+		local enable_wheel = (cursor.on_wheel_down or cursor.on_wheel_up) ~= nil
+		if enable_mbtn_left ~= cursor.mbtn_left_enabled then
+			mp[(enable_mbtn_left and 'enable' or 'disable') .. '_key_bindings']('mbtn_left')
+			cursor.mbtn_left_enabled = enable_mbtn_left
+		end
+		if enable_wheel ~= cursor.wheel_enabled then
+			mp[(enable_wheel and 'enable' or 'disable') .. '_key_bindings']('wheel')
+			cursor.wheel_enabled = enable_wheel
+		end
+	end,
+	-- Cursor auto-hiding after period of inactivity
+	autohide = function()
+		if not cursor.on_primary_up and not Menu:is_open() then handle_mouse_leave() end
+	end,
+	autohide_timer = (function()
+		local timer = mp.add_timeout(mp.get_property_native('cursor-autohide') / 1000, function() cursor.autohide() end)
+		timer:kill()
+		return timer
+	end)(),
+	queue_autohide = function()
+		if options.autohide and not cursor.on_primary_up then
+			cursor.autohide_timer:kill()
+			cursor.autohide_timer:resume()
+		end
 	end
 }
 state = {
@@ -385,10 +423,6 @@ state = {
 	has_chapter = false,
 	has_playlist = false,
 	shuffle = options.shuffle,
-	cursor_autohide_timer = mp.add_timeout(mp.get_property_native('cursor-autohide') / 1000, function()
-		if not options.autohide then return end
-		handle_mouse_leave()
-	end),
 	mouse_bindings_enabled = false,
 	uncached_ranges = nil,
 	cache = nil,
@@ -402,6 +436,8 @@ state = {
 	playlist_pos = 0,
 	margin_top = 0,
 	margin_bottom = 0,
+	margin_left = 0,
+	margin_right = 0,
 	hidpi_scale = 1,
 }
 thumbnail = {width = 0, height = 0, disabled = false}
@@ -449,7 +485,7 @@ function update_fullormaxed()
 	state.fullormaxed = state.fullscreen or state.maximized
 	update_display_dimensions()
 	Elements:trigger('prop_fullormaxed', state.fullormaxed)
-	handle_mouse_move(INFINITY, INFINITY)
+	update_cursor_position(INFINITY, INFINITY)
 end
 
 function update_human_times()
@@ -476,22 +512,40 @@ end
 function update_margins()
 	if display.height == 0 then return end
 
+	local function is_persistent(element) return element and element.enabled and element:is_persistent() end
+	local timeline, top_bar, controls, volume = Elements.timeline, Elements.top_bar, Elements.controls, Elements.volume
 	-- margins are normalized to window size
-	local timeline, top_bar, controls = Elements.timeline, Elements.top_bar, Elements.controls
-	local bottom_y = controls and controls.enabled and controls.ay or timeline.ay
-	local top, bottom = 0, (display.height - bottom_y) / display.height
+	local left, right, top, bottom = 0, 0, 0, 0
 
-	if top_bar.enabled and top_bar:get_visibility() > 0 then
-		top = (top_bar.size or 0) / display.height
+	if is_persistent(controls) then bottom = (display.height - controls.ay) / display.height
+	elseif is_persistent(timeline) then bottom = (display.height - timeline.ay) / display.height end
+
+	if is_persistent(top_bar) then top = top_bar.title_by / display.height end
+
+	if is_persistent(volume) then
+		if options.volume == 'left' then left = volume.bx / display.width
+		elseif options.volume == 'right' then right = volume.ax / display.width end
 	end
 
-	if top == state.margin_top and bottom == state.margin_bottom then return end
+	if top == state.margin_top and bottom == state.margin_bottom and
+		left == state.margin_left and right == state.margin_right then return end
 
 	state.margin_top = top
 	state.margin_bottom = bottom
+	state.margin_left = left
+	state.margin_right = right
 
 	utils.shared_script_property_set('osc-margins', string.format('%f,%f,%f,%f', 0, 0, top, bottom))
-	mp.set_property_native('user-data/osc/margins', { l = 0, r = 0, t = top, b = bottom })
+	mp.set_property_native('user-data/osc/margins', { l = left, r = right, t = top, b = bottom })
+
+	if not options.adjust_osd_margins then return end
+	local osd_margin_y, osd_margin_x, osd_factor_x = 0, 0, display.width / display.height * 720
+	if config.osd_alignment_y == 'bottom' then osd_margin_y = round(bottom * 720)
+	elseif config.osd_alignment_y == 'top' then osd_margin_y = round(top * 720) end
+	if config.osd_alignment_x == 'left' then osd_margin_x = round(left * osd_factor_x)
+	elseif config.osd_alignment_x == 'right' then osd_margin_x = round(right * osd_factor_x) end
+	mp.set_property_native('osd-margin-y', osd_margin_y + config.osd_margin_y)
+	mp.set_property_native('osd-margin-x', osd_margin_x + config.osd_margin_x)
 end
 function create_state_setter(name, callback)
 	return function(_, value)
@@ -507,6 +561,8 @@ function set_state(name, value)
 end
 
 function update_cursor_position(x, y)
+	local old_x, old_y = cursor.x, cursor.y
+
 	-- mpv reports initial mouse position on linux as (0, 0), which always
 	-- displays the top bar, so we hardcode cursor position as infinity until
 	-- we receive a first real mouse move event with coordinates other than 0,0.
@@ -518,7 +574,21 @@ function update_cursor_position(x, y)
 	-- add 0.5 to be in the middle of the pixel
 	cursor.x, cursor.y = (x + 0.5) / display.scale_x, (y + 0.5) / display.scale_y
 
-	Elements:update_proximities()
+	if old_x ~= cursor.x or old_y ~= cursor.y then
+		Elements:update_proximities()
+
+		if cursor.x == INFINITY or cursor.y == INFINITY then
+			cursor.hidden = true
+			Elements:trigger('global_mouse_leave')
+		elseif cursor.hidden then
+			cursor.hidden = false
+			Elements:trigger('global_mouse_enter')
+		end
+
+		Elements:proximity_trigger('mouse_move')
+		cursor.queue_autohide()
+	end
+
 	request_render()
 end
 
@@ -533,27 +603,7 @@ function handle_mouse_leave()
 		end
 	end
 
-	cursor.hidden = true
-	Elements:update_proximities()
-	Elements:trigger('global_mouse_leave')
-end
-
-function handle_mouse_enter(x, y)
-	cursor.hidden = false
-	update_cursor_position(x, y)
-	Elements:trigger('global_mouse_enter')
-end
-
-function handle_mouse_move(x, y)
-	update_cursor_position(x, y)
-	Elements:proximity_trigger('mouse_move')
-	request_render()
-
-	-- Restart timer that hides UI when mouse is autohidden
-	if options.autohide then
-		state.cursor_autohide_timer:kill()
-		state.cursor_autohide_timer:resume()
-	end
+	update_cursor_position(INFINITY, INFINITY)
 end
 
 function handle_file_end()
@@ -629,23 +679,23 @@ if options.click_threshold > 0 then
 	mp.enable_key_bindings('mouse_movement', 'allow-vo-dragging+allow-hide-cursor')
 end
 
-function update_mouse_pos(_, mouse)
+function handle_mouse_pos(_, mouse)
 	if not mouse then return end
 	if cursor.hover_raw and not mouse.hover then
 		handle_mouse_leave()
 	else
-		if cursor.hidden then handle_mouse_enter(mouse.x, mouse.y) end
-		handle_mouse_move(mouse.x, mouse.y)
+		update_cursor_position(mouse.x, mouse.y)
 	end
 	cursor.hover_raw = mouse.hover
 end
-mp.observe_property('mouse-pos', 'native', update_mouse_pos)
+mp.observe_property('mouse-pos', 'native', handle_mouse_pos)
 mp.observe_property('osc', 'bool', function(name, value) if value == true then mp.set_property('osc', 'no') end end)
 mp.register_event('file-loaded', function()
 	set_state('path', normalize_path(mp.get_property_native('path')))
 	Elements:flash({'top_bar'})
 end)
 mp.register_event('end-file', function(event)
+	set_state('path', nil)
 	if event.reason == 'eof' then
 		file_end_timer:kill()
 		handle_file_end()
@@ -830,20 +880,26 @@ mp.observe_property('core-idle', 'native', create_state_setter('core_idle'))
 --[[ KEY BINDS ]]
 
 -- Pointer related binding groups
+function make_cursor_handler(event, cb)
+	return function(...)
+		call_maybe(cursor[event], ...)
+		call_maybe(cb, ...)
+		cursor.queue_autohide() -- refresh cursor autohide timer
+	end
+end
 mp.set_key_bindings({
 	{
 		'mbtn_left',
-		function(...) call_maybe(cursor.on_primary_up, ...) end,
-		function(...)
-			update_mouse_pos(nil, mp.get_property_native('mouse-pos'))
-			call_maybe(cursor.on_primary_down, ...)
-		end,
+		make_cursor_handler('on_primary_up'),
+		make_cursor_handler('on_primary_down', function(...)
+			handle_mouse_pos(nil, mp.get_property_native('mouse-pos'))
+		end),
 	},
 	{'mbtn_left_dbl', 'ignore'},
 }, 'mbtn_left', 'force')
 mp.set_key_bindings({
-	{'wheel_up', function(...) call_maybe(cursor.on_wheel_up, ...) end},
-	{'wheel_down', function(...) call_maybe(cursor.on_wheel_down, ...) end},
+	{'wheel_up', make_cursor_handler('on_wheel_up')},
+	{'wheel_down', make_cursor_handler('on_wheel_down')},
 }, 'wheel', 'force')
 
 -- Adds a key binding that respects rerouting set by `key_binding_overwrites` table.
@@ -879,9 +935,9 @@ bind_command('decide-pause-indicator', function() Elements.pause_indicator:decid
 bind_command('menu', function() toggle_menu_with_items() end)
 bind_command('menu-blurred', function() toggle_menu_with_items({mouse_nav = true}) end)
 local track_loaders = {
-	{name = 'subtitles', hint = '字幕轨', prop = 'sub', allowed_types = itable_join(config.types.video, config.types.subtitle)},
-	{name = 'audio', hint = '音频轨', prop = 'audio', allowed_types = itable_join(config.types.video, config.types.audio)},
-	{name = 'video', hint = '视频轨', prop = 'video', allowed_types = config.types.video},
+	{name = 'subtitles', hint = lang._sid_menu, prop = 'sub', allowed_types = itable_join(config.types.video, config.types.subtitle)},
+	{name = 'audio', hint = lang._aid_menu, prop = 'audio', allowed_types = itable_join(config.types.video, config.types.audio)},
+	{name = 'video', hint = lang._vid_menu, prop = 'video', allowed_types = config.types.video},
 }
 for _, loader in ipairs(track_loaders) do
 	local menu_type = 'load-' .. loader.name
@@ -903,21 +959,21 @@ for _, loader in ipairs(track_loaders) do
 		open_file_navigation_menu(
 			path,
 			function(path) mp.commandv(loader.prop .. '-add', path) end,
-			{type = menu_type, title = '导入 ' .. loader.hint, allowed_types = loader.allowed_types}
+			{type = menu_type, title = lang._import_id_menu .. loader.hint, allowed_types = loader.allowed_types}
 		)
 	end)
 end
 bind_command('subtitles', create_select_tracklist_type_menu_opener(
-	'字幕轨列表', 'sub', 'sid', 'script-binding uosc/load-subtitles'
+	lang._sid_submenu_title, 'sub', 'sid', 'script-binding uosc/load-subtitles'
 ))
 bind_command('audio', create_select_tracklist_type_menu_opener(
-	'音频轨列表', 'audio', 'aid', 'script-binding uosc/load-audio'
+	lang._aid_submenu_title, 'audio', 'aid', 'script-binding uosc/load-audio'
 ))
 bind_command('video', create_select_tracklist_type_menu_opener(
-	'视频轨列表', 'video', 'vid', 'script-binding uosc/load-video'
+	lang._vid_submenu_title, 'video', 'vid', 'script-binding uosc/load-video'
 ))
 bind_command('playlist', create_self_updating_menu_opener({
-	title = '播放列表',
+	title = lang._playlist_submenu_title,
 	type = 'playlist',
 	list_prop = 'playlist',
 	serializer = function(playlist)
@@ -941,7 +997,7 @@ bind_command('playlist', create_self_updating_menu_opener({
 	on_delete_item = function(index) mp.commandv('playlist-remove', tostring(index - 1)) end,
 }))
 bind_command('chapters', create_self_updating_menu_opener({
-	title = '章节列表',
+	title = lang._chapter_list_submenu_title,
 	type = 'chapters',
 	list_prop = 'chapter-list',
 	active_prop = 'chapter',
@@ -961,7 +1017,7 @@ bind_command('chapters', create_self_updating_menu_opener({
 	on_select = function(index) mp.commandv('set', 'chapter', tostring(index - 1)) end,
 }))
 bind_command('editions', create_self_updating_menu_opener({
-	title = '版本列表',
+	title = lang._edition_list_submenu_title,
 	type = 'editions',
 	list_prop = 'edition-list',
 	active_prop = 'current-edition',
@@ -969,7 +1025,7 @@ bind_command('editions', create_self_updating_menu_opener({
 		local items = {}
 		for _, edition in ipairs(editions or {}) do
 			items[#items + 1] = {
-				title = edition.title or '版本',
+				title = edition.title or lang._edition_list_submenu_item_title,
 				hint = tostring(edition.id + 1),
 				value = edition.id,
 				active = edition.id == current_id,
@@ -1007,7 +1063,7 @@ bind_command('stream-quality', function()
 		items[#items + 1] = {title = height .. 'p', value = format, active = format == ytdl_format}
 	end
 
-	Menu:open({type = 'stream-quality', title = '流式传输品质', items = items}, function(format)
+	Menu:open({type = 'stream-quality', title = lang._stream_quality_submenu_title, items = items}, function(format)
 		mp.set_property('ytdl-format', format)
 
 		-- Reload the video to apply new format
@@ -1137,7 +1193,7 @@ bind_command('delete-file-quit', function()
 	mp.command('quit')
 end)
 bind_command('audio-device', create_self_updating_menu_opener({
-	title = '音频输出设备列表',
+	title = lang._audio_device_submenu_title,
 	type = 'audio-device-list',
 	list_prop = 'audio-device-list',
 	active_prop = 'audio-device',

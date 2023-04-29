@@ -1,13 +1,15 @@
 --[[
 SOURCE_ https://github.com/po5/thumbfast/blob/master/thumbfast.lua
-COMMIT_ 08d81035bb5020f4caa326e642341f2e8af00ffe
+COMMIT_ ddc61957ce38b62283c5d7ef99a7252c7499cc8b
 
 适配多个OSC类脚本的新缩略图引擎
 
 示例在 input.conf 中写入：
-CTRL+t   script-binding thumbfast/toggle   # 临时显示/隐藏缩略图
 
-]]--
+ Ctrl+Alt+t   script-binding thumbfast/thumb_rerun    # 重启缩略图的获取（修复缩略图卡死）
+ Ctrl+t       script-binding thumbfast/thumb_toggle   # 启用/禁用缩略图预览
+
+]]
 
 local options = {
 
@@ -25,6 +27,7 @@ local options = {
     hwdec = true,          -- 启用硬解加速
     direct_io = true,      -- Windows only: use native Windows API to write to pipe (requires LuaJIT)
 
+    sw_threads = 2,        -- 软解线程
     binpath = "mpv",       -- 自定义mpv路径
     min_duration = 0,      -- 对短视频关闭预览（秒）
     precise = "auto",      -- 预览精度
@@ -149,7 +152,7 @@ local function debounce(func, wait)
 end
 
 local client_script = [=[
-#!/bin/bash
+#!/usr/bin/env bash
 MPV_IPC_FD=0; MPV_IPC_PATH="%s"
 trap "kill 0" EXIT
 while [[ $# -ne 0 ]]; do case $1 in --mpv-ipc-fd=*) MPV_IPC_FD=${1/--mpv-ipc-fd=/} ;; esac; shift; done
@@ -245,8 +248,8 @@ if os_name == "Mac" and options.binpath == "bundle" and unique then
 end
 
 local function calc_dimensions()
-    local width = mp.get_property_number("video-out-params/dw")
-    local height = mp.get_property_number("video-out-params/dh")
+    local width = mp.get_property_number("video-params/w")
+    local height = mp.get_property_number("video-params/h")
     if not width or not height then return end
 
     local scale = mp.get_property_number("display-hidpi-scale", 1)
@@ -318,14 +321,14 @@ local function spawn(time)
     local args = {
         mpv_path, path, "--config=no", "--terminal=no", "--msg-level=all=no", "--idle=yes", "--keep-open=always","--pause=yes", "--ao=null", "--vo=null",
         "--load-auto-profiles=no", "--load-osd-console=no", "--load-stats-overlay=no", "--osc=no",
-        "--vd-lavc-skiploopfilter=all", "--vd-lavc-skipidct=all", "--vd-lavc-software-fallback=1", "--vd-lavc-fast", "--vd-lavc-threads=2", "--hwdec="..(options.hwdec and "auto" or "no"),
+        "--vd-lavc-skiploopfilter=all", "--vd-lavc-skipidct=all", "--vd-lavc-software-fallback=1", "--vd-lavc-fast", "--vd-lavc-threads="..options.sw_threads, "--hwdec="..(options.hwdec and "auto" or "no"),
         "--edition="..(mp.get_property_number("edition") or "auto"), "--vid="..(vid or "auto"), "--sub=no", "--audio=no", "--sub-auto=no", "--audio-file-auto=no",
         "--start="..time,
         "--ytdl-format=worst", "--demuxer-readahead-secs=0", "--demuxer-max-bytes=128KiB",
         "--gpu-dumb-mode=yes", "--tone-mapping=clip", "--hdr-compute-peak=no",
-        "--sws-scaler=point", "--sws-fast=yes", "--sws-allow-zimg=no",
+        "--sws-scaler=fast-bilinear", "--sws-fast=yes", "--sws-allow-zimg=no",
         "--audio-pitch-correction=no",
-        "--vf=".."scale=w="..effective_w..":h="..effective_h..":flags=neighbor,format=bgra",
+        "--vf=".."scale=w="..effective_w..":h="..effective_h..":flags=fast_bilinear,format=bgra",
         "--ovc=rawvideo", "--of=image2", "--ofopts=update=1", "--ocopy-metadata=no", "--o="..options.tnpath
     }
 
@@ -635,13 +638,22 @@ mp.register_script_message("clear", clear)
 mp.register_event("file-loaded", file_load)
 mp.register_event("shutdown", shutdown)
 
-mp.add_key_binding(nil, "toggle", function()
+mp.add_key_binding(nil, "thumb_rerun", function()
+    clear()
+    shutdown()
+    auto_run = true
+    file_load()
+    mp.osd_message("缩略图功能已重启", 2)
+end)
+mp.add_key_binding(nil, "thumb_toggle", function()
     if auto_run then
         auto_run = false
-        mp.osd_message("缩略图功能已临时禁用", 2)
+        file_load()
+        shutdown()
+        mp.osd_message("缩略图功能已禁用", 2)
     else
         auto_run = true
-        mp.osd_message("缩略图功能已临时启用", 2)
+        file_load()
+        mp.osd_message("缩略图功能已启用", 2)
     end
-    file_load()
 end)

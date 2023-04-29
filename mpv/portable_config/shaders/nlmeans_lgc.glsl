@@ -138,13 +138,13 @@ vec4 hook()
  * incompatible with textureGather optimizations, so NG=1 to disable them.
  */
 #ifdef LUMA_raw
-#define S 20.0
+#define S 2.0
 #define P 3
 #define R 5
 #else
-#define S 0.125
+#define S 11.66
 #define P 3
-#define R 3
+#define R 5
 #endif
 
 /* Adaptive sharpening
@@ -169,14 +169,14 @@ vec4 hook()
 #ifdef LUMA_raw
 #define AS 0
 #define ASF 2.0
-#define ASP 32.0
+#define ASP 4.0
 #define ASW 0
 #define ASK 1
 #define ASC 0.0
 #else
 #define AS 0
 #define ASF 2.0
-#define ASP 32.0
+#define ASP 4.0
 #define ASW 0
 #define ASK 1
 #define ASC 0.0
@@ -194,7 +194,7 @@ vec4 hook()
 #ifdef LUMA_raw
 #define SW 1.0
 #else
-#define SW 1.0
+#define SW 0.75
 #endif
 
 /* Weight discard
@@ -213,11 +213,11 @@ vec4 hook()
  */
 #ifdef LUMA_raw
 #define WD 2
-#define WDT 1.0
+#define WDT 0.5
 #define WDP 6.0
 #else
-#define WD 1
-#define WDT 1.0
+#define WD 0
+#define WDT 0.75
 #define WDP 6.0
 #endif
 
@@ -226,6 +226,9 @@ vec4 hook()
  * Reduces denoising around very bright/dark areas. The downscaling factor of 
  * EP (located near the top of this shader) controls the area sampled for 
  * luminance (higher numbers consider more area).
+ *
+ * This is incompatible with RGB. If you have RGB hooks enabled then you will 
+ * have to delete the EP shader stage or specify EP=0 through nlmeans_cfg.
  *
  * EP: 1 to enable, 0 to disable
  * DP: EP strength on dark patches, 0 to fully denoise
@@ -459,10 +462,10 @@ const float hr = int(R/2) - 0.5*(1-(R%2)); // sample between pixels for even res
 
 #define S_TRIANGLE(z,hz,incr) for (z.y = -hz; z.y <= 0; z.y++) for (z.x = -abs(abs(z.y) - hz); z.x <= abs(abs(z.y) - hz); incr)
 #define S_TRUNC_TRIANGLE(z,hz,incr) for (z.y = -hz; z.y <= 0; z.y++) for (z.x = -abs(abs(z.y) - hz); z.x <= abs(abs(z.y) - hz)*int(z.y!=0); incr)
-#define S_TRIANGLE_A(hz,Z) int(pow(hz, 2)+Z)
+#define S_TRIANGLE_A(hz,Z) int(hz*hz+Z)
 
 #define S_DIAMOND(z,hz,incr) for (z.x = -hz; z.x <= hz; z.x++) for (z.y = -abs(abs(z.x) - hz); z.y <= abs(abs(z.x) - hz); incr)
-#define S_DIAMOND_A(hz,Z) int(pow(hz, 2)*2+Z)
+#define S_DIAMOND_A(hz,Z) int(hz*hz*2+Z)
 
 #define S_VERTICAL(z,hz,incr) for (z.x = 0; z.x <= 0; z.x++) for (z.y = -hz; z.y <= hz; incr)
 #define S_HORIZONTAL(z,hz,incr) for (z.x = -hz; z.x <= hz; incr) for (z.y = 0; z.y <= 0; z.y++)
@@ -645,9 +648,11 @@ vec4 patch_comparison(vec3 r, vec3 r2)
 		vec4 pdiff_sq = vec4(0);
 		FOR_PATCH(p) {
 			vec3 transformed_p = vec3(ref(rot(p.xy, ri), rfi), p.z);
-			vec4 diff_sq = pow(load2(p + r2) - load2((transformed_p + r) * SF), vec4(2));
+			vec4 diff_sq = load2(p + r2) - load2((transformed_p + r) * SF);
+			diff_sq *= diff_sq;
 #if PST && P >= PST
-			float pdist = exp(-pow(length(p.xy*PSD)*PSS, 2));
+			float pdist = length(p.xy*PSD)*PSS;
+			pdist = exp(-(pdist*pdist));
 			diff_sq = pow(max(diff_sq, EPSILON), vec4(pdist));
 #endif
 			pdiff_sq += diff_sq;
@@ -664,6 +669,7 @@ vec4 patch_comparison(vec3 r, vec3 r2)
 #if (defined(LUMA_gather) || D1W) && ((PS == 3 || PS == 7) && P == 3) && PST == 0 && M != 1 && REGULAR_ROTATIONS && NO_GATHER
 // 3x3 diamond/plus patch_comparison_gather
 // XXX extend to support arbitrary sizes (probably requires code generation)
+// XXX extend to support 3x3 square
 const ivec2 offsets[4] = { ivec2(0,-1), ivec2(-1,0), ivec2(0,1), ivec2(1,0) };
 const ivec2 offsets_sf[4] = { ivec2(0,-1) * SF, ivec2(-1,0) * SF, ivec2(0,1) * SF, ivec2(1,0) * SF };
 vec4 poi_patch = gather_offs(0, offsets);
@@ -673,7 +679,7 @@ vec4 patch_comparison_gather(vec3 r, vec3 r2)
 	vec4 transformer = gather_offs(r, offsets_sf);
 	FOR_ROTATION {
 		FOR_REFLECTION {
-			float diff_sq = dot(pow(poi_patch - transformer, vec4(2)), vec4(1));
+			float diff_sq = dot((poi_patch - transformer) * (poi_patch - transformer), vec4(1));
 			min_rot = min(diff_sq, min_rot);
 #if RFI
 			switch(rfi) {
@@ -689,11 +695,14 @@ vec4 patch_comparison_gather(vec3 r, vec3 r2)
 		transformer = transformer.zwxy;
 #endif
 	}
-	return vec4(min_rot + pow(poi2.x - load2(r).x, 2), 0, 0, 0) * p_scale;
+	float center_diff_sq = poi2.x - load2(r).x;
+	center_diff_sq *= center_diff_sq;
+	return vec4(min_rot + center_diff_sq, 0, 0, 0) * p_scale;
 }
 #elif (defined(LUMA_gather) || D1W) && PS == 6 && REGULAR_ROTATIONS && NO_GATHER
 // tiled even square patch_comparison_gather
 // XXX extend to support odd square?
+// XXX rotations/reflections appear to be subtly broken
 vec4 patch_comparison_gather(vec3 r, vec3 r2)
 {
 	vec2 tile;
@@ -720,8 +729,9 @@ vec4 patch_comparison_gather(vec3 r, vec3 r2)
 			}
 #endif
 
-			vec4 diff_sq = pow(poi_patch - transformer, vec4(2));
+			vec4 diff_sq = (poi_patch - transformer) * (poi_patch - transformer);
 #if PST && P >= PST
+			// XXX refactor to avoid pow (should probably break off into a function)
 			vec4 pdist = vec4(
 				exp(-pow(length((tile+vec2(0,1))*PSD)*PSS, 2)),
 				exp(-pow(length((tile+vec2(1,1))*PSD)*PSS, 2)),
@@ -807,7 +817,7 @@ vec4 hook()
 		weight = vec4(weight.x);
 #endif
 
-		weight *= exp(-pow(length(r*SD)*SS, 2)); // spatial kernel
+		weight *= exp(-(length(r*SD)*SS * length(r*SD)*SS)); // spatial kernel
 
 #if WD == 2 || M == 3 // weight discard, weighted median intensity
 		all_weights[r_index] = weight;

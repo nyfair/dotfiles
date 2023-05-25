@@ -3,7 +3,7 @@
 
 import vapoursynth as vs
 from vapoursynth import core
-from k7sfunc import FPS_CTRL, MVT_LQ
+import k7sfunc as k7f
 
 clip = video_in
 
@@ -11,12 +11,17 @@ clip = video_in
 # 用户选项 #
 ############
 
+H_Pre = 1440
 Recal = True
 Block = True
+Lk_Fmt = False
+## 整数，预降低处理源高度
 ## <True|False> 是否使用二次分析
 ## <True|False> 是否使用Block模式
+## <True|False> 锁定像素格式为yuv420p8
 
-clip = FPS_CTRL(clip, fps_in=container_fps, fps_ret=True)
-clip = MVT_LQ(clip, fps_in=container_fps, fps_out=container_fps*2, recal=Recal, block=Block)
+ret = k7f.FPS_CTRL(clip, fps_in=container_fps, fps_ret=True)
+clip = k7f.FMT_CTRL(clip, h_max=H_Pre, fmt_pix=1 if Lk_Fmt else 0)
+clip = k7f.MVT_LQ(clip, fps_in=container_fps, fps_out=container_fps*2, recal=Recal, block=Block)
 
 clip.set_output()

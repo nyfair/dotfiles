@@ -2,14 +2,14 @@
 ### 文档： https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
 ##################################################
 
-__version__ = "0.1.0"
+__version__ = "0.1.14"
 
 __all__ = [
-	"FMT_CTRL", "FPS_CHANGE", "FPS_CTRL",
+	"FMT_CHANGE", "FMT_CTRL", "FPS_CHANGE", "FPS_CTRL",
 	"ACNET_STD", "CUGAN_NV", "ESRGAN_NV", "NNEDI3_STD", "WAIFU_NV",
-	"MVT_LQ", "MVT_STD", "MVT_POT", "RIFE_STD", "RIFE_NV", "SVP_LQ", "SVP_STD", "SVP_HQ",
+	"MVT_LQ", "MVT_STD", "MVT_POT", "MVT_MQ", "RIFE_STD", "RIFE_NV", "RIFE_NV_ORT", "SVP_LQ", "SVP_STD", "SVP_HQ", "SVP_PRO",
 	"BM3D_NV", "CCD_STD", "FFT3D_STD", "NLM_STD", "NLM_NV",
-	"AA_NV", "DEBAND_STD", "DEINT_STD", "IVTC_STD", "STAB_STD", "STAB_HQ", "UAI_TRT_NV",
+	"AA_NV", "COLOR_P3W_FIX", "DEBAND_STD", "DEINT_LQ", "DEINT_STD", "DEINT_EX", "IVTC_STD", "STAB_STD", "STAB_HQ", "UAI_NV_TRT",
 ]
 
 import os
@@ -39,7 +39,63 @@ else :
 vs_api = vs.__api_version__.api_major
 
 nnedi3_resample = None
+QTGMCv2 = None
 vsmlrt = None
+
+##################################################
+## 格式转换 # TODO
+##################################################
+
+def FMT_CHANGE(
+	input : vs.VideoNode,
+	fmtc : bool = False, # TODO
+	algo : typing.Literal[1, 2, 3, 4] = 1,
+	param_a : float = 0.0,
+	param_b : float = 0.0,
+	w_out : int = 0,
+	h_out : int = 0,
+	fmt_pix : typing.Literal[-1, 0, 1, 2, 3] = -1,
+	dither : typing.Literal[0, 1, 2, 3] = 0,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "FMT_CHANGE"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(fmtc, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 fmtc 的值无效")
+	if algo not in [1, 2, 3, 4] :
+		raise vs.Error(f"模块 {func_name} 的子参数 algo 的值无效")
+	if not isinstance(param_a, (int, float)) or not isinstance(param_b, (int, float)) :
+		raise vs.Error(f"模块 {func_name} 的子参数 param_a 或 param_b 的值无效")
+	if not isinstance(w_out, int) or not isinstance(h_out, int) :
+		raise vs.Error(f"模块 {func_name} 的子参数 w_out 或 h_out 的值无效")
+	if isinstance(w_out, int) and isinstance(h_out, int) :
+		if w_out < 0 or h_out < 0 :
+			raise vs.Error(f"模块 {func_name} 的子参数 w_out 或 h_out 的值无效")
+	if fmt_pix not in [-1, 0, 1, 2, 3] :
+		raise vs.Error(f"模块 {func_name} 的子参数 fmt_pix 的值无效")
+	if dither not in [0, 1, 2, 3] :
+		raise vs.Error(f"模块 {func_name} 的子参数 dither 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+	fmt_in = input.format.id
+	algo_val = ["Bilinear", "Bicubic", "Lanczos", "Spline36"][algo - 1]
+	resizer = getattr(core.resize, algo_val)
+	if fmt_pix > 0 :
+		fmt_pix_val = [vs.YUV420P8, vs.YUV420P10, vs.YUV444P16][fmt_pix - 1]
+		fmt_out = fmt_pix_val
+	elif fmt_pix == 0 :
+		fmt_out = fmt_in
+		if fmt_in not in [vs.YUV420P8, vs.YUV420P10] :
+			fmt_out = vs.YUV420P10
+	dither_val = ["none", "ordered", "random", "error_diffusion"][dither]
+
+	output = resizer(clip=input, width=w_out if w_out else None, height=h_out if h_out else None, filter_param_a=param_a, filter_param_b=param_b, format=fmt_pix_val if fmt_pix >= 0 else None, dither_type=dither_val)
+
+	return output
 
 ##################################################
 ## 限制输出的格式与高度
@@ -49,6 +105,8 @@ def FMT_CTRL(
 	input : vs.VideoNode,
 	h_max : int = 0,
 	h_ret : bool = False,
+	spl_b : float = 1/3, # TODO 替换为 FMT_CHANGE
+	spl_c : float = 1/3,
 	fmt_pix : typing.Literal[0, 1, 2, 3] = 0,
 	vs_t : int = vs_thd_dft,
 ) -> vs.VideoNode :
@@ -60,47 +118,59 @@ def FMT_CTRL(
 		raise vs.Error(f"模块 {func_name} 的子参数 h_max 的值无效")
 	if not isinstance(h_ret, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 h_ret 的值无效")
+	if not isinstance(spl_b, (int, float)) :
+		raise vs.Error(f"模块 {func_name} 的子参数 spl_b 的值无效")
+	if not isinstance(spl_c, (int, float)) :
+		raise vs.Error(f"模块 {func_name} 的子参数 spl_c 的值无效")
 	if fmt_pix not in [0, 1, 2, 3] :
 		raise vs.Error(f"模块 {func_name} 的子参数 fmt_pix 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
 	core.num_threads = vs_t
-	fmt_in = input.format.id
+	fmt_src = input.format
+	fmt_in = fmt_src.id
+	spl_b, spl_c = float(spl_b), float(spl_c)
+	w_in, h_in = input.width, input.height
+	# https://github.com/mpv-player/mpv/blob/master/video/filter/vf_vapoursynth.c
+	fmt_mpv = [vs.YUV420P8, vs.YUV420P10, vs.YUV422P8, vs.YUV422P10, vs.YUV410P8, vs.YUV411P8, vs.YUV440P8, vs.YUV444P8, vs.YUV444P10]
+	fmt_pass = [vs.YUV420P8, vs.YUV420P10, vs.YUV444P16]
+	fmt_safe = [vs.YUV444P8, vs.YUV444P10, vs.YUV444P16]
+
 	if fmt_pix :
-		if fmt_pix == 1 :
-			fmt_pix = vs.YUV420P8
-		elif fmt_pix == 2 :
-			fmt_pix = vs.YUV420P10
-		elif fmt_pix == 3 :
-			fmt_pix = vs.YUV444P16
-		fmt_out = fmt_pix
+		fmt_pix_val = fmt_pass[fmt_pix - 1]
+		fmt_out = fmt_pix_val
 		if fmt_out == fmt_in :
 			clip = input
 		else :
-			clip = core.resize.Bilinear(clip=input, format=fmt_out)
+			if (fmt_out not in fmt_safe) and (fmt_in in fmt_safe) :
+				if not (w_in % 2 == 0) :
+					w_in = w_in - 1
+				if not (h_in % 2 == 0) :
+					h_in = h_in - 1
+				clip = core.resize.Bicubic(clip=input, width=w_in, height=h_in, filter_param_a=spl_b, filter_param_b=spl_c, format=fmt_out)
+			else :
+				clip = core.resize.Bilinear(clip=input, format=fmt_out)
 	else :
-		# https://github.com/mpv-player/mpv/blob/master/video/filter/vf_vapoursynth.c
-		fmt_mpv = [
-			vs.YUV420P8, vs.YUV420P10,
-			vs.YUV422P8, vs.YUV422P10,
-			vs.YUV410P8, vs.YUV411P8, vs.YUV440P8, vs.YUV444P8, vs.YUV444P10,
-		]
 		if fmt_in not in fmt_mpv :
 			fmt_out = vs.YUV420P10
-			clip = core.resize.Bilinear(clip=input, format=fmt_out)
+			if (fmt_out not in fmt_safe) and (fmt_in in fmt_safe) :
+				if not (w_in % 2 == 0) :
+					w_in = w_in - 1
+				if not (h_in % 2 == 0) :
+					h_in = h_in - 1
+				clip = core.resize.Bicubic(clip=input, width=w_in, height=h_in, filter_param_a=spl_b, filter_param_b=spl_c, format=fmt_out)
+			else :
+				clip = core.resize.Bilinear(clip=input, format=fmt_out)
 		else :
 			fmt_out = fmt_in
 			clip = input
 
 	if h_max :
-		w_in = input.width
-		h_in = input.height
 		if h_in > h_max :
 			if h_ret :
 				raise Exception("源高度超过限制的范围，已临时中止。")
 			else :
-				fmt_src = input.format
 				w_ds = w_in * (h_max / h_in)
 				h_ds = h_max
 				if fmt_src.subsampling_w or fmt_src.subsampling_h :
@@ -115,28 +185,28 @@ def FMT_CTRL(
 		if h_max >= h_in :
 			output = clip
 		else :
-			output = core.resize.Lanczos(clip=clip, width=w_ds, height=h_ds)
+			output = core.resize.Bicubic(clip=clip, width=w_ds, height=h_ds, filter_param_a=spl_b, filter_param_b=spl_c)
 	elif not h_max and fmt_pix :
-		if fmt_pix == fmt_out :
+		if fmt_pix_val == fmt_out :
 			output = clip
 		else :
-			output = core.resize.Bilinear(clip=clip, format=fmt_pix)
+			output = core.resize.Bilinear(clip=clip, format=fmt_pix_val)
 	else :
 		if h_max >= h_in :
-			if fmt_pix == fmt_out :
+			if fmt_pix_val == fmt_out :
 				output = clip
 			else :
-				output = core.resize.Bilinear(clip=clip, format=fmt_pix)
+				output = core.resize.Bilinear(clip=clip, format=fmt_pix_val)
 		else :
-			if fmt_pix == fmt_out :
-				output = core.resize.Lanczos(clip=clip, width=w_ds, height=h_ds)
+			if fmt_pix_val == fmt_out :
+				output = core.resize.Bicubic(clip=clip, width=w_ds, height=h_ds, filter_param_a=spl_b, filter_param_b=spl_c)
 			else :
-				output = core.resize.Lanczos(clip=clip, width=w_ds, height=h_ds, format=fmt_pix)
+				output = core.resize.Bicubic(clip=clip, width=w_ds, height=h_ds, filter_param_a=spl_b, filter_param_b=spl_c)
 
 	return output
 
 ##################################################
-## MOD HAvsFunc (7f0a9a7a37b60a05b9f408024d203e511e544a61)
+## MOD HAvsFunc (e1fcce2b4645ed4acde9192606d00bcac1b5c9e5)
 ## 变更源帧率
 ##################################################
 
@@ -160,21 +230,16 @@ def FPS_CHANGE(
 	core.num_threads = vs_t
 
 	def ChangeFPS(clip: vs.VideoNode, fpsnum: int, fpsden: int = 1) -> vs.VideoNode:
-
-		factor = (fpsnum / fpsden) * (1000 / (fps_in * 1000))
-
+		factor = (fpsnum / fpsden) * (clip.fps_den / clip.fps_num)
 		def frame_adjuster(n: int) -> vs.VideoNode:
-
 			real_n = math.floor(n / factor)
 			one_frame_clip = clip[real_n] * (len(clip) + 100)
-
 			return one_frame_clip
-
 		attribute_clip = clip.std.BlankClip(length=math.floor(len(clip) * factor), fpsnum=fpsnum, fpsden=fpsden)
-
 		return attribute_clip.std.FrameEval(eval=frame_adjuster)
 
-	fin = ChangeFPS(clip=input, fpsnum=fps_out * 1000, fpsden=1000)
+	src = core.std.AssumeFPS(clip=input, fpsnum=fps_in * 1000, fpsden=1000)
+	fin = ChangeFPS(clip=src, fpsnum=fps_out * 1000, fpsden=1000)
 	output = core.std.AssumeFPS(clip=fin, fpsnum=fps_out * 1000, fpsden=1000)
 
 	return output
@@ -426,7 +491,7 @@ def NNEDI3_STD(
 		clip = input
 
 	output = nnedi3_resample.nnedi3_resample(input=clip, target_width=input.width * 2, target_height=input.height * 2,
-		nsize=nsize, nns=nns, mode="znedi3" if cpu else "nnedi3cl", device=gpu)
+		nsize=nsize, nns=nns, qual=1, etype=0, pscrn=2, mode="znedi3" if cpu else "nnedi3cl", device=gpu)
 	if ext_proc :
 		output = core.resize.Bilinear(clip=output, format=fmt_in)
 
@@ -642,12 +707,71 @@ def MVT_POT(
 	return output
 
 ##################################################
+## MOD xvs (b24d5594206635f7373838acb80643d2ab141222)
+## MVtools补帧
+##################################################
+
+def MVT_MQ(
+	input : vs.VideoNode,
+	fps_in : float = 23.976,
+	fps_out : float = 59.940,
+	qty_lv : typing.Literal[1, 2, 3] = 1,
+	block : bool = True,
+	blksize : typing.Literal[4, 8, 16, 32] = 8,
+	thscd1 : int = 360,
+	thscd2 : int = 80,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "MVT_MQ"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if fps_in <= 0.0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
+	if fps_out <= 0.0 or fps_out <= fps_in :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_out 的值无效")
+	if qty_lv not in [1, 2, 3] :
+		raise vs.Error(f"模块 {func_name} 的子参数 qty_lv 的值无效")
+	if not isinstance(block, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 block 的值无效")
+	if blksize not in [4, 8, 16, 32] :
+		raise vs.Error(f"模块 {func_name} 的子参数 blksize 的值无效")
+	if not (isinstance(thscd1, int) and thscd1 >= 0) :
+		raise vs.Error(f"模块 {func_name} 的子参数 thscd1 的值无效")
+	if not (isinstance(thscd2, int) and (thscd2 >= 0 and thscd2 <= 255)) :
+		raise vs.Error(f"模块 {func_name} 的子参数 thscd2 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+	blksizev = blksize
+	search = [0, 3, 3][(qty_lv - 1)]
+	block_mode = [0, 0, 3][(qty_lv - 1)]
+	flow_mask = [0, 1, 2][(qty_lv - 1)]
+	analParams = { 'overlap':0,'overlapv':0,'search':search,'dct':0,'truemotion':True,
+		'blksize':blksize,'blksizev':blksizev,'searchparam':2,'badsad':10000,'badrange':24,
+		'divide':0 }
+	bofp = { 'thscd1':thscd1,'thscd2':thscd2,'blend':True,'num':int(fps_out * 1e6),'den':1e6 }
+
+	cut0 = core.std.AssumeFPS(input, fpsnum=int(fps_in * 1e6), fpsden=1e6)
+	sup = core.mv.Super(input, pel=2, sharp=2, rfilter=4)
+	bvec = core.mv.Analyse(sup, isb=True, **analParams)
+	fvec = core.mv.Analyse(sup, isb=False, **analParams)
+	if block == True :
+		output =  core.mv.BlockFPS(cut0, sup, bvec, fvec, **bofp, mode=block_mode)
+	else :
+		output = core.mv.FlowFPS(cut0, sup, bvec, fvec, **bofp, mask=flow_mask)
+
+	return output
+
+##################################################
 ## RIFE补帧
 ##################################################
 
 def RIFE_STD(
 	input : vs.VideoNode,
 	sc_mode : typing.Literal[0, 1, 2] = 1,
+	skip : bool = True,
 	stat_th : float = 60.0,
 	fps_num : int = 2,
 	fps_den : int = 1,
@@ -661,6 +785,8 @@ def RIFE_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if sc_mode not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 sc_mode 的值无效")
+	if not isinstance(skip, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 skip 的值无效")
 	if stat_th <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
 	if not isinstance(fps_num, int) or fps_num <= 1 :
@@ -688,7 +814,7 @@ def RIFE_STD(
 		cut0 = core.mv.SCDetection(clip=input, vectors=vec, thscd1=240, thscd2=130)
 
 	cut1 = core.resize.Bilinear(clip=cut0, format=vs.RGBS, matrix_in_s="709")
-	cut2 = core.rife.RIFE(clip=cut1, model=9, factor_num=fps_num, factor_den=fps_den, gpu_id=gpu, gpu_thread=gpu_t, sc=True if sc_mode else False, skip=True, skip_threshold=stat_th)
+	cut2 = core.rife.RIFE(clip=cut1, model=9, factor_num=fps_num, factor_den=fps_den, gpu_id=gpu, gpu_thread=gpu_t, sc=True if sc_mode else False, skip=skip, skip_threshold=stat_th)
 	output = core.resize.Bilinear(clip=cut2, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
 
 	return output
@@ -784,13 +910,76 @@ def RIFE_NV(
 		fin = core.std.Crop(clip=fin, right=w_tmp, bottom=h_tmp)
 	else :
 		fin = vsmlrt.RIFE(clip=cut1, multi=fps_num, scale=scale_model, model=46, ensemble=t_tta, _implementation=2, backend=vsmlrt.BackendV2.TRT(
-			num_streams=gpu_t, force_fp16=False, output_format=0,
+			num_streams=gpu_t, fp16=False, force_fp16=False, tf32=True, output_format=0,
 			workspace=None if ws_size < 128 else ws_size,
 			use_cuda_graph=True, use_cublas=False, use_cudnn=False,
 			static_shape=st_eng, min_shapes=[0, 0],
 			opt_shapes=None, max_shapes=None,
 			device_id=gpu, short_path=True))
 	output = core.resize.Bilinear(clip=fin, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+
+	return output
+
+##################################################
+## RIFE补帧
+##################################################
+
+def RIFE_NV_ORT(
+	input : vs.VideoNode,
+	sc_mode : typing.Literal[0, 1, 2] = 1,
+	fps_num : typing.Literal[2, 3, 4] = 2,
+	cudnn : bool = False,
+	ext_proc : bool = False,
+	gpu : typing.Literal[0, 1, 2] = 0,
+	gpu_t : typing.Literal[1, 2, 3] = 2,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "RIFE_NV_ORT"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if sc_mode not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 sc_mode 的值无效")
+	if fps_num not in [2, 3, 4] :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_num 的值无效")
+	if not isinstance(cudnn, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 cudnn 的值无效")
+	if not isinstance(ext_proc, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 ext_proc 的值无效")
+	if gpu not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	global vsmlrt
+	if vsmlrt is None :
+		import vsmlrt
+
+	core.num_threads = vs_t
+	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+	fmt_in = input.format.id
+	w_p = (input.width  + 31) // 32 * 32 - input.width
+	h_p = (input.height + 31) // 32 * 32 - input.height
+
+	if sc_mode == 0 :
+		cut0 = input
+	elif sc_mode == 1 :
+		cut0 = core.misc.SCDetect(clip=input, threshold=0.15)
+	elif sc_mode == 2 :
+		sup = core.mv.Super(clip=input, pel=1)
+		vec = core.mv.Analyse(super=sup, isb=True)
+		cut0 = core.mv.SCDetection(clip=input, vectors=vec, thscd1=240, thscd2=130)
+
+	be = vsmlrt.BackendV2.ORT_CUDA(fp16=True, num_streams=gpu_t, cudnn_benchmark=cudnn, device_id=gpu)
+
+	if ext_proc :
+		pad = cut0.std.AddBorders(right=w_p, bottom=h_p).resize.Bilinear(format=vs.RGBS, matrix_in_s="709")
+		memc = vsmlrt.RIFE(pad, multi=fps_num, model=46, _implementation=1, backend=be)
+		output = memc.resize.Bilinear(format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None).std.Crop(right=w_p, bottom=h_p)
+	else :
+		cut1 = core.resize.Bilinear(clip=cut0, format=vs.RGBS, matrix_in_s="709")
+		memc =vsmlrt.RIFE(cut1, multi=fps_num, model=46, _implementation=2, backend=be)
+		output = core.resize.Bilinear(clip=memc, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
 
 	return output
 
@@ -823,15 +1012,11 @@ def SVP_LQ(
 
 	core.num_threads = vs_t
 	fps_num = fps_num
-	if cpu == 0 :
-		cpu = 1
-	else :
-		cpu = 0
-	gpu = gpu
+	acc = 1 if cpu == 0 else 0
 
-	smoothfps_params = "{rate:{num:%d,den:1,abs:false},algo:21,gpuid:%d,mask:{area:100},scene:{mode:0,limits:{m1:1800,m2:3600,scene:5200,zero:100,blocks:45}}}" % (fps_num, gpu)
-	super_params = "{pel:2,gpu:%d,scale:{up:2,down:4}}" % (cpu)
-	analyse_params = "{block:{w:32,h:16,overlap:2},main:{levels:4,search:{type:4,distance:-8,coarse:{type:2,distance:-5,bad:{range:0}}},penalty:{lambda:10.0,plevel:1.5,pzero:110,pnbour:65}},refine:[{thsad:200,search:{type:4,distance:2}}]}"
+	smooth_param = "{rate:{num:%d,den:1,abs:false},algo:21,gpuid:%d,mask:{area:100},scene:{mode:0,limits:{m1:1800,m2:3600,scene:5200,zero:100,blocks:45}}}" % (fps_num, gpu)
+	super_param = "{pel:2,gpu:%d,scale:{up:2,down:4}}" % (acc)
+	analyse_param = "{block:{w:32,h:16,overlap:2},main:{levels:4,search:{type:4,distance:-8,coarse:{type:2,distance:-5,bad:{range:0}}},penalty:{lambda:10.0,plevel:1.5,pzero:110,pnbour:65}},refine:[{thsad:200,search:{type:4,distance:2}}]}"
 
 	clip = input
 	if clip.format.id == vs.YUV420P8 :
@@ -842,9 +1027,9 @@ def SVP_LQ(
 		clip = clip.resize.Bilinear(format=vs.YUV420P10, dither_type="random")
 		clip8 = clip.resize.Bilinear(format=vs.YUV420P8)
 
-	svps = core.svp1.Super(clip8, super_params)
-	svpv = core.svp1.Analyse(svps["clip"], svps["data"], clip, analyse_params)
-	output = core.svp2.SmoothFps(clip, svps["clip"], svps["data"], svpv["clip"], svpv["data"], smoothfps_params, src=clip, fps=fps_in)
+	svps = core.svp1.Super(clip8, super_param)
+	svpv = core.svp1.Analyse(svps["clip"], svps["data"], clip if acc else clip8, analyse_param)
+	output = core.svp2.SmoothFps(clip if acc else clip8, svps["clip"], svps["data"], svpv["clip"], svpv["data"], smooth_param, src=clip if acc else clip8, fps=fps_in)
 
 	return output
 
@@ -878,26 +1063,90 @@ def SVP_STD(
 	core.num_threads = vs_t
 	fps_in = fps_in
 	fps_out = fps_out * 1e6
-	if cpu == 0 :
-		cpu = 1
-	else :
-		cpu = 0
-	gpu = gpu
+	acc = 1 if cpu == 0 else 0
 
 	smoothfps_params = "{rate:{num:%f,den:1000000,abs:true},algo:21,gpuid:%d,mask:{area:100},scene:{limits:{m1:1800,m2:3600,scene:5200,zero:100,blocks:45}}}" % (fps_out, gpu)
-	super_params = "{pel:2,gpu:%d,scale:{up:2,down:4}}" % (cpu)
+	super_params = "{pel:2,gpu:%d,scale:{up:2,down:4}}" % (acc)
 	analyse_params = "{block:{w:32,h:32,overlap:2},main:{levels:4,search:{type:4,distance:-8,coarse:{type:4,distance:-5,bad:{range:0}}},penalty:{plevel:1.3,pzero:110,pnbour:75}},refine:[{thsad:200,search:{type:4,distance:2}}]}"
 
 	clip_f = core.resize.Bilinear(clip=input, format=vs.YUV420P8)
 	super = core.svp1.Super(clip_f, super_params)
-	vectors = core.svp1.Analyse(super["clip"], super["data"], clip_f, analyse_params)
-	smooth = core.svp2.SmoothFps(input, super["clip"], super["data"], vectors["clip"], vectors["data"], smoothfps_params, src=clip_f, fps=fps_in)
+	vectors = core.svp1.Analyse(super["clip"], super["data"], input if acc else clip_f, analyse_params)
+	smooth = core.svp2.SmoothFps(input if acc else clip_f, super["clip"], super["data"], vectors["clip"], vectors["data"], smoothfps_params, src=input if acc else clip_f, fps=fps_in)
 	output = core.std.AssumeFPS(smooth, fpsnum=smooth.fps_num, fpsden=smooth.fps_den)
 
 	return output
 
 ##################################################
-## PORT @https://github.com/natural-harmonia-gropius
+## CREDIT https://github.com/BlackMickey
+## SVP补帧
+##################################################
+
+def SVP_PRO(
+	input : vs.VideoNode,
+	fps_in : float = 23.976,
+	fps_num : int = 2,
+	fps_den : int = 1,
+	abs : bool = False,
+	cpu : typing.Literal[0, 1] = 0,
+	nvof : bool = False,
+	gpu : typing.Literal[0, 11, 12, 21] = 0,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "SVP_PRO"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if fps_in <= 0.0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
+	if not (isinstance(fps_num, int) and fps_num > 1) :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_num 的值无效")
+	if not (isinstance(fps_den, int) and fps_den >= 1 and fps_den < fps_num) :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_den 的值无效")
+	if not isinstance(abs, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 abs 的值无效")
+		if abs and (fps_num / fps_den <= fps_in) :
+			raise vs.Error(f"模块 {func_name} 的子参数 fps_num 或 fps_den 的值无效")
+	if cpu not in [0, 1] :
+		raise vs.Error(f"模块 {func_name} 的子参数 cpu 的值无效")
+	if not isinstance(nvof, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 nvof 的值无效")
+		if nvof and cpu :
+			raise vs.Error(f"模块 {func_name} 的子参数 cpu 的值无效")
+	if gpu not in [0, 11, 12, 21] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+	multi = "true" if abs else "false"
+	acc = 1 if cpu == 0 else 0
+
+	super_param = "{pel:1,gpu:%d,full:true,scale:{up:2,down:4}}" % (acc)
+	analyse_param = "{vectors:3,block:{w:32,h:32,overlap:1},main:{levels:5,search:{type:4,distance:3,sort:true,satd:false,coarse:{width:960,type:4,distance:4,satd:true,trymany:false,bad:{sad:1000,range:0}}},penalty:{lambda:3.0,plevel:1.3,lsad:8000,pnew:50,pglobal:50,pzero:100,pnbour:65,prev:0}},refine:[{thsad:800,search:{type:4,distance:1,satd:false},penalty:{pnew:50}}]}"
+	smooth_param = "{rate:{num:%d,den:%d,abs:%s},algo:13,block:false,cubic:%d,gpuid:%d,linear:true,mask:{cover:40,area:16,area_sharp:0.7},scene:{mode:3,blend:false,limits:{m1:2400,m2:3601,scene:5002,zero:125,blocks:40},luma:1.5}}" % (fps_num, fps_den, multi, acc, gpu)
+	smooth_nvof_param = smooth_param
+
+	clip = input
+	if clip.format.id == vs.YUV420P8 :
+		clip8 = clip
+	elif clip.format.id == vs.YUV420P10 :
+		clip8 = clip.resize.Bilinear(format=vs.YUV420P8)
+	else :
+		clip = clip.resize.Bilinear(format=vs.YUV420P10)
+		clip8 = clip.resize.Bilinear(format=vs.YUV420P8)
+
+	if nvof :
+		output  = core.svp2.SmoothFps_NVOF(clip, smooth_nvof_param, nvof_src=clip8, src=clip,fps=fps_in)
+	else :
+		super = core.svp1.Super(clip8, super_param)
+		vectors = core.svp1.Analyse(super["clip"], super["data"], clip if acc else clip8, analyse_param)
+		output = core.svp2.SmoothFps(clip if acc else clip8, super["clip"], super["data"], vectors["clip"], vectors["data"], smooth_param, src=clip if acc else clip8, fps=fps_in)
+
+	return output
+
+##################################################
+## PORT https://github.com/natural-harmonia-gropius
 ## SVP补帧
 ##################################################
 
@@ -927,6 +1176,8 @@ def SVP_HQ(
 	core.num_threads = vs_t
 	fps = fps_in or 23.976
 	freq = fps_dp or 59.970
+	acc = 1 if cpu == 0 else 0
+	overlap = 2 if cpu == 0 else 3
 	w, h = input.width, input.height
 
 	if (freq - fps < 2):
@@ -934,25 +1185,9 @@ def SVP_HQ(
 
 	target_fps = 60
 
-	sp, ap, fp = """{
-			gpu: 1
-		}""", """{
-			block: { w: 32, h: 16, overlap: 2 },
-			main: {
-				levels: 5,
-				search: {
-					type: 4, distance: -12,
-					coarse: { type: 4, distance: -1, trymany: true, bad: { range: 0 } }
-				},
-				penalty: { lambda: 3.33, plevel: 1.33, lsad: 3300, pzero: 110, pnbour: 50 }
-			},
-			refine: [{ thsad: 400 }, { thsad: 200, search: { type: 4, distance: -4 } }]
-		}""", """{
-			gpuid: 0,
-			algo: 23, rate: { num: %d, den: %d, abs: true },
-			mask: { cover: 80, area: 30, area_sharp: 0.75 },
-			scene: { mode: 0, limits: { scene: 6000, zero: 100, blocks: 40 } }
-		}""" % (round(min(max(target_fps, fps * 2, freq / 2), freq)) * 1000, 1001)
+	sp = "{gpu:%d}" % (acc)
+	ap = "{block:{w:32,h:16,overlap:%d},main:{levels:5,search:{type:4,distance:-12,coarse:{type:4,distance:-1,trymany:true,bad:{range:0}}},penalty:{lambda:3.33,plevel:1.33,lsad:3300,pzero:110,pnbour:50}},refine:[{thsad:400},{thsad:200,search:{type:4,distance:-4}}]}" % (overlap)
+	fp = "{gpuid:%d,algo:23,rate:{num:%d,den:%d,abs:true},mask:{cover:80,area:30,area_sharp:0.75},scene:{mode:0,limits:{scene:6000,zero:100,blocks:40}}}" % (gpu, round(min(max(target_fps, fps * 2, freq / 2), freq)) * 1000, 1001)
 
 	def toYUV420(clip) :
 		if clip.format.id == vs.YUV420P8:
@@ -970,7 +1205,7 @@ def SVP_HQ(
 		r = s["clip"], s["data"]
 		v = core.svp1.Analyse(*r, clip, ap)
 		r = *r, v["clip"], v["data"]
-		clip = core.svp2.SmoothFps(clip, *r, fp, src=clip, fps=fps)
+		clip = core.svp2.SmoothFps(clip if acc else clip8, *r, fp, src=clip, fps=fps)
 		return clip
 
 	output = svpflow(input, fps, sp, ap, fp)
@@ -1038,15 +1273,12 @@ def CCD_STD(
 	fmt_in = input.format.id
 
 	def ccd(src: vs.VideoNode, threshold: float = 4) -> vs.VideoNode:
-
 		if src.format.color_family != vs.RGB or src.format.sample_type != vs.FLOAT:
 			raise ValueError('ccd: only RGBS format is supported')
-
 		thr = threshold**2/195075.0
 		r = core.std.ShufflePlanes([src, src, src], [0, 0, 0], vs.RGB)
 		g = core.std.ShufflePlanes([src, src, src], [1, 1, 1], vs.RGB)
 		b = core.std.ShufflePlanes([src, src, src], [2, 2, 2], vs.RGB)
-
 		ex_ccd = core.akarin.Expr([r, g, b, src],
 			'x[-12,-12] x - 2 pow y[-12,-12] y - 2 pow z[-12,-12] z - 2 pow + + A! '
 			'x[-4,-12] x - 2 pow y[-4,-12] y - 2 pow z[-4,-12] z - 2 pow + + B! '
@@ -1078,7 +1310,6 @@ def CCD_STD(
 			f'M@ {thr} < a[-12,12] 0 ? N@ {thr} < a[-4,12] 0 ? '
 			f'O@ {thr} < a[4,12] 0 ? P@ {thr} < a[12,12] 0 ? '
 			'+ + + + + + + + + + + + + + + a + Q@ /')
-
 		return ex_ccd
 
 	cut = core.resize.Bilinear(clip=input, format=vs.RGBS, matrix_in_s="709")
@@ -1261,12 +1492,12 @@ def NLM_NV(
 	return output
 
 ##################################################
-## EEID2抗锯齿（损坏）
+## EEID2抗锯齿
 ##################################################
 
 def AA_NV(
 	input : vs.VideoNode,
-	plane : typing.List[int] = [0],
+#	plane : typing.List[int] = [0],
 	gpu : typing.Literal[-1, 0, 1, 2] = -1,
 	gpu_t : typing.Literal[1, 2, 3] = 2,
 	vs_t : int = vs_thd_dft,
@@ -1275,8 +1506,8 @@ def AA_NV(
 	func_name = "AA_NV"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if plane not in ([0], [1], [2], [0, 1], [0, 2], [1, 2], [0, 1, 2]) :
-		raise vs.Error(f"模块 {func_name} 的子参数 plane 的值无效")
+#	if plane not in ([0], [1], [2], [0, 1], [0, 2], [1, 2], [0, 1, 2]) :
+#		raise vs.Error(f"模块 {func_name} 的子参数 plane 的值无效")
 	if gpu not in [-1, 0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if gpu_t not in [1, 2, 3] :
@@ -1286,7 +1517,40 @@ def AA_NV(
 
 	core.num_threads = vs_t
 
-	output = core.eedi2cuda.AA2(clip=input, mthresh=10, lthresh=20, vthresh=20, estr=2, dstr=4, maxd=24, map=0, nt=50, pp=1, planes=plane, num_streams=gpu_t, device_id=gpu)
+	output = core.eedi2cuda.AA2(clip=input, mthresh=10, lthresh=20, vthresh=20, estr=2, dstr=4, maxd=24, map=0, nt=50, pp=1, num_streams=gpu_t, device_id=gpu)
+
+	return output
+
+##################################################
+## https://github.com/mpv-player/mpv/issues/11460
+## 修复p3错误转换后的白点
+##################################################
+
+def COLOR_P3W_FIX(
+	input : vs.VideoNode,
+	linear : bool = False,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "COLOR_P3W_FIX"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(linear, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 linear 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+	colorlv = input.get_frame(0).props._ColorRange
+
+	cut = core.resize.Bilinear(clip=input, format=vs.RGB48, matrix_in_s="709")
+	if linear :
+		cut = core.fmtc.transfer(clip=cut, transs="1886", transd="linear")
+	cut = core.fmtc.primaries(clip=cut, prims="p3d65", primd="p3dci", wconv=True)
+	if linear :
+		cut = core.fmtc.transfer(clip=cut, transs="linear", transd="1886")
+
+	output = core.resize.Bilinear(clip=cut, format=vs.YUV420P8, matrix_s="709", range=1 if colorlv==0 else None)
 
 	return output
 
@@ -1338,12 +1602,43 @@ def DEBAND_STD(
 	return output
 
 ##################################################
+## 简易反交错
+##################################################
+
+def DEINT_LQ(
+	input : vs.VideoNode,
+	deint_m : typing.Literal[1, 2] = 1,
+	tff : bool = True,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "DEINT_STD"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if deint_m not in [1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 deint_m 的值无效")
+	if not isinstance(tff, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 tff 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+
+	if deint_m == 1 :
+		output = core.resize.Bob(clip=input, filter="bicubic", tff=tff)
+	elif deint_m == 2 :
+		output = core.bwdif.Bwdif(clip=input, field=3 if tff else 2)
+
+	return output
+
+##################################################
 ## 基于nnedi3/eedi3作参考的反交错
 ##################################################
 
 def DEINT_STD(
 	input : vs.VideoNode,
 	ref_m : typing.Literal[1, 2, 3] = 1,
+	tff : bool = True,
 	gpu : typing.Literal[-1, 0, 1, 2] = -1,
 	deint_m : typing.Literal[1, 2, 3] = 1,
 	vs_t : int = vs_thd_dft,
@@ -1354,6 +1649,8 @@ def DEINT_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if ref_m not in [1, 2, 3] :
 		raise vs.Error(f"模块 {func_name} 的子参数 ref_m 的值无效")
+	if not isinstance(tff, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 tff 的值无效")
 	if gpu not in [-1, 0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if deint_m not in [1, 2, 3] :
@@ -1364,18 +1661,67 @@ def DEINT_STD(
 	core.num_threads = vs_t
 
 	if ref_m == 1 :
-		ref = core.znedi3.nnedi3(clip=input, field=3)
+		ref = core.znedi3.nnedi3(clip=input, field=3 if tff else 2, dh=False)
 	elif ref_m == 2 :
-		ref = core.nnedi3cl.NNEDI3CL(clip=input, field=3, device=gpu)
+		ref = core.nnedi3cl.NNEDI3CL(clip=input, field=3 if tff else 2, dh=False, device=gpu)
 	elif ref_m == 3 :
-		ref = core.eedi3m.EEDI3CL(clip=input, field=3, device=gpu)
+		ref = core.eedi3m.EEDI3CL(clip=input, field=3 if tff else 2, dh=False, device=gpu)
 
 	if deint_m == 1 :
-		output = core.bwdif.Bwdif(clip=input, field=3, edeint=ref)
+		output = core.bwdif.Bwdif(clip=input, field=3 if tff else 2, edeint=ref)
 	elif deint_m == 2 :
-		output = core.yadifmod.Yadifmod(clip=input, edeint=ref, order=1, mode=1)
+		output = core.yadifmod.Yadifmod(clip=input, edeint=ref, order=1 if tff else 0, mode=1)
 	elif deint_m == 3 :
-		output = core.tdm.TDeintMod(clip=input, order=1, mode=1, length=6, ttype=0, edeint=ref)
+		output = core.tdm.TDeintMod(clip=input, order=1 if tff else 0, mode=1, length=6, ttype=0, edeint=ref)
+
+	return output
+
+##################################################
+## 终极反交错
+##################################################
+
+def DEINT_EX(
+	input : vs.VideoNode,
+	fps_in : float = 23.976,
+	obs : bool = True,
+	deint_lv : typing.Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] = 6,
+	src_type : typing.Literal[0, 1, 2, 3] = 0,
+	deint_den : typing.Literal[1, 2] = 1,
+	tff : typing.Literal[0, 1, 2] = 0,
+	cpu : bool = True,
+	gpu : typing.Literal[-1, 0, 1, 2] = -1,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "DEINT_EX"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if fps_in <= 0.0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
+	if not isinstance(obs, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 obs 的值无效")
+	if deint_lv not in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] :
+		raise vs.Error(f"模块 {func_name} 的子参数 deint_lv 的值无效")
+	if src_type not in [0, 1, 2, 3] :
+		raise vs.Error(f"模块 {func_name} 的子参数 src_type 的值无效")
+	if deint_den not in [1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 deint_den 的值无效")
+	if tff not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 tff 的值无效")
+	if not isinstance(cpu, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 cpu 的值无效")
+	if gpu not in [-1, 0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+
+	global QTGMCv2
+	if QTGMCv2 is None :
+		from qtgmc import QTGMCv2
+
+	output = QTGMCv2(input=input, fps_in=fps_in, obs=obs, deint_lv=deint_lv, src_type=src_type, deint_den=deint_den, tff=tff, cpu=cpu, gpu=gpu, check=False)
 
 	return output
 
@@ -1402,8 +1748,7 @@ def IVTC_STD(
 
 	core.num_threads = vs_t
 	if fps_in <= 24 or fps_in >= 31 or (fps_in >= 26 and fps_in <= 29) :
-		# 无解，跳过
-		output = input
+		raise Exception("源帧率无效，已临时中止。")
 	else :
 
 		if ivtc_m == 1 :
@@ -1446,7 +1791,7 @@ def STAB_STD(
 	return output
 
 ##################################################
-## PORT HAvsFunc (7f0a9a7a37b60a05b9f408024d203e511e544a61)
+## PORT HAvsFunc (0f6a7d9d9712d59b4e74e1e570fc6e3a526917f9)
 ## 抗镜头抖动
 ##################################################
 
@@ -1463,39 +1808,31 @@ def STAB_HQ(
 
 	core.num_threads = vs_t
 
-	def SCDetect(clip: vs.VideoNode, threshold: float = 0.1) -> vs.VideoNode:
-		def copy_property(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
+	def scdetect(clip: vs.VideoNode, threshold: float = 0.1) -> vs.VideoNode:
+		def _copy_property(n: int, f: list[vs.VideoFrame]) -> vs.VideoFrame:
 			fout = f[0].copy()
-			fout.props['_SceneChangePrev'] = f[1].props['_SceneChangePrev']
-			fout.props['_SceneChangeNext'] = f[1].props['_SceneChangeNext']
-
+			fout.props["_SceneChangePrev"] = f[1].props["_SceneChangePrev"]
+			fout.props["_SceneChangeNext"] = f[1].props["_SceneChangeNext"]
 			return fout
-
 		sc = clip
 		if clip.format.color_family == vs.RGB:
-			sc = clip.resize.Point(format=vs.GRAY8, matrix_s='709')
+			sc = clip.resize.Point(format=vs.GRAY8, matrix_s="709")
 		sc = sc.misc.SCDetect(threshold=threshold)
 		if clip.format.color_family == vs.RGB:
-			sc = clip.std.ModifyFrame(clips=[clip, sc], selector=copy_property)
-
+			sc = clip.std.ModifyFrame(clips=[clip, sc], selector=_copy_property)
 		return sc
 
-	def AverageFrames(
-		clip: vs.VideoNode, weights: typing.Union[float, typing.Sequence[float]], scenechange: typing.Optional[float] = None, planes: typing.Optional[typing.Union[int, typing.Sequence[int]]] = None
-	) -> vs.VideoNode:
-
+	## PORT HAvsFunc (17b62a0b2695e0950e0899dba466ab42327c32c9)
+	def average_frames(clip: vs.VideoNode, weights: typing.Union[float, typing.Sequence[float]], scenechange: typing.Optional[float] = None, planes: typing.Optional[typing.Union[int, typing.Sequence[int]]] = None) -> vs.VideoNode:
 		if scenechange:
-			clip = SCDetect(clip, threshold=scenechange)
-
+			clip = scdetect(clip, scenechange)
 		return clip.std.AverageFrames(weights=weights, scenechange=scenechange, planes=planes)
 
 	def Stab(clp, dxmax=4, dymax=4, mirror=0):
-
-		temp = AverageFrames(clp, weights=[1] * 15, scenechange=25 / 255)
-		inter = core.std.Interleave([core.rgvs.Repair(temp, AverageFrames(clp, weights=[1] * 3, scenechange=25 / 255), mode=[1]), clp])
+		temp = average_frames(clp, weights=[1] * 15, scenechange=25 / 255)
+		inter = core.std.Interleave([core.rgvs.Repair(temp, average_frames(clp, weights=[1] * 3, scenechange=25 / 255), mode=[1]), clp])
 		mdata = inter.mv.DepanEstimate(trust=0, dxmax=dxmax, dymax=dymax)
 		last = inter.mv.DepanCompensate(data=mdata, offset=-1, mirror=mirror)
-
 		return last[::2]
 
 	output = Stab(clp=input, mirror=15)
@@ -1506,11 +1843,14 @@ def STAB_HQ(
 ## 自定义ONNX模型（仅支持放大类）
 ##################################################
 
-def UAI_TRT_NV(
+def UAI_NV_TRT(
 	input : vs.VideoNode,
+	clamp : bool = False,
 	model_pth : str = "",
 	opt_lv : typing.Literal[0, 1, 2, 3, 4, 5] = 3,
+	cuda_opt : typing.List[int] = [0, 0, 0],
 	fp16 : bool = False,
+	tf32 : bool = True,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : typing.Literal[1, 2, 3] = 2,
 	st_eng : bool = False,
@@ -1520,15 +1860,21 @@ def UAI_TRT_NV(
 	vs_t : int = vs_thd_dft,
 ) -> vs.VideoNode :
 
-	func_name = "UAI_TRT_NV"
+	func_name = "UAI_NV_TRT"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(clamp, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 clamp 的值无效")
 	if len(model_pth) == 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 model_pth 的值无效")
 	if opt_lv not in [0, 1, 2, 3, 4, 5] :
 		raise vs.Error(f"模块 {func_name} 的子参数 opt_lv 的值无效")
+	if not (len(cuda_opt) == 3 and all(isinstance(num, int) and num in [0, 1] for num in cuda_opt)) :
+		raise vs.Error(f"模块 {func_name} 的子参数 cuda_opt 的值无效")
 	if not isinstance(fp16, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 fp16 的值无效")
+	if not isinstance(tf32, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 tf32 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if gpu_t not in [1, 2, 3] :
@@ -1555,12 +1901,15 @@ def UAI_TRT_NV(
 	core.num_threads = vs_t
 	fmt_in = input.format.id
 	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+	nv1, nv2, nv3 = [bool(num) for num in cuda_opt]
 
 	clip = core.resize.Bilinear(clip=input, format=vs.RGBH if fp16 else vs.RGBS, matrix_in_s="709")
+	if clamp :
+		clip = core.akarin.Expr(clips=clip, expr="x 0 1 clamp")
 	be_param = vsmlrt.BackendV2.TRT(
 		builder_optimization_level=opt_lv, short_path=True, device_id=gpu,
-		num_streams=gpu_t, use_cuda_graph=True, use_cublas=False, use_cudnn=False,
-		force_fp16=fp16, output_format=1 if fp16 else 0, workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
+		num_streams=gpu_t, use_cuda_graph=nv1, use_cublas=nv2, use_cudnn=nv3,
+		fp16=fp16, force_fp16=False, tf32=tf32, output_format=1 if fp16 else 0, workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
 		static_shape=st_eng, min_shapes=[0, 0] if st_eng else [64, 64], opt_shapes=None if st_eng else res_opt, max_shapes=None if st_eng else res_max)
 	infer = vsmlrt.inference(clips=clip, network_path=os.path.join(vsmlrt.models_path, model_pth), backend=be_param)
 	output = core.resize.Bilinear(clip=infer, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)

@@ -19,7 +19,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Profile description: Default profile, general purpose, tuned for low noise
+// Description: nlmeans.glsl: Default profile, general purpose, tuned for low noise
 
 /* The recommended usage of this shader and its variant profiles is to add them 
  * to input.conf and then dispatch the appropriate shader via a keybind during 
@@ -48,8 +48,8 @@
  * of noise.
  *
  * The denoiser will not work properly if the content has been upscaled 
- * beforehand, whether it was done by you or someone down the line. Consider 
- * issuing a command to downscale in the mpv console, like so:
+ * beforehand (whether it was done by you or not). In such cases, consider 
+ * issuing a command to downscale in the mpv console (backtick ` key):
  *
  * vf toggle scale=-2:720
  *
@@ -65,12 +65,13 @@
  * may be different for your system.
  *
  * If your GPU doesn't support textureGather, or if you are on a version of mpv 
- * prior to 0.35.0, then consider setting RI/RFI to 0, or try the LQ and VLQ 
- * profiles.
+ * prior to 0.35.0, then consider setting RI/RFI to 0, or try the LQ profile
  *
- * textureGather is LUMA only and limited to the following configurations:
+ * If you plan on tinkering with NLM's settings, read below:
  *
- * - PS={3,7}:P=3:PST=0:RI={0,1,3}:RFI={0,1,2}:M!=1
+ * textureGather only applies to luma and limited to the these configurations:
+ *
+ * - PS={3,7}:P=3:PST=0:RI={0,1,3}:RFI={0,1,2}
  *   - Default, very fast, rotations and reflections should be free
  *   - If this is unusually slow then try changing gpu-api and vo
  *   - If it's still slow, try setting RI/RFI to 0.
@@ -83,6 +84,7 @@
  *
  * Options which always disable textureGather:
  * 	- PD
+ * 	- NG
  */
 
 // The following is shader code injected from guided.glsl
@@ -104,7 +106,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-//desc: Guided filter guided by the downscaled image
+// Description: guided.glsl: Guided by the downscaled image
 
 /* The radius can be adjusted with the MEANI stage's downscaling factor. 
  * Higher numbers give a bigger radius.
@@ -120,10 +122,10 @@
 
 //!HOOK LUMA
 //!HOOK CHROMA
-//!DESC Guided filter (PREI)
 //!BIND HOOKED
 //!WIDTH HOOKED.w 1.25 /
 //!HEIGHT HOOKED.h 1.25 /
+//!DESC Guided filter (PREI)
 //!SAVE _INJ_PREI
 
 vec4 hook()
@@ -133,16 +135,17 @@ vec4 hook()
 
 //!HOOK LUMA
 //!HOOK CHROMA
-//!DESC Guided filter (I)
 //!BIND _INJ_PREI
-//!WIDTH HOOKED.w 1.0 /
-//!HEIGHT HOOKED.h 1.0 /
+//!WIDTH HOOKED.w
+//!HEIGHT HOOKED.h
+//!DESC Guided filter (I)
 //!SAVE _INJ_I
 
 vec4 hook()
 {
 return _INJ_PREI_texOff(0);
 }
+
 
 //!HOOK LUMA
 //!HOOK CHROMA
@@ -310,24 +313,14 @@ vec4 hook()
 return _INJ_MEANA_texOff(0) * HOOKED_texOff(0) + _INJ_MEANB_texOff(0);
 }
 
-// End of source code injected from guided.glsl
-//!HOOK LUMA
-//!HOOK CHROMA
-//!DESC Non-local means (downscale)
-//!WIDTH LUMA.w 3 /
-//!HEIGHT LUMA.h 3 /
-//!BIND LUMA
-//!SAVE EP
-
-vec4 hook()
-{
-	return LUMA_texOff(0);
-}
+// End of source code injected from guided.glsl 
 
 //!HOOK LUMA
 //!HOOK CHROMA
-//!DESC Non-local means (share)
 //!BIND RF_LUMA
+//!WIDTH RF_LUMA.w
+//!HEIGHT RF_LUMA.h
+//!DESC Non-local means (RF, share)
 //!SAVE RF
 
 vec4 hook()
@@ -337,42 +330,35 @@ vec4 hook()
 
 //!HOOK LUMA
 //!HOOK CHROMA
+//!BIND LUMA
+//!WIDTH LUMA.w 3 /
+//!HEIGHT LUMA.h 3 /
+//!DESC Non-local means (EP)
+//!SAVE EP
+
+vec4 hook()
+{
+	return LUMA_texOff(0);
+}
+
+//!HOOK LUMA
+//!HOOK CHROMA
 //!BIND HOOKED
 //!BIND RF_LUMA
-//!BIND EP
 //!BIND RF
+//!BIND EP
 //!DESC Non-local means (nlmeans.glsl)
 
-/* User variables
- *
- * It is usually preferable to denoise chroma and luma differently, so the user 
- * variables for luma and chroma are split.
- */
+// User variables
 
-/* S = denoising factor
- * P = patch size
- * R = research size
- *
- * The denoising factor controls the level of blur, higher is blurrier.
- *
- * Patch size should usually be an odd number greater than or equal to 3. 
- * Higher values are slower and not always better.
- *
- * Research size usually be an odd number greater than or equal to 3. Higher 
- * values are usually better, but slower and offer diminishing returns.
- *
- * Even-numbered patch/research sizes will sample between pixels unless PS=6. 
- * It's not known whether this is ever useful behavior or not. This is 
- * incompatible with textureGather optimizations, so NG=1 to disable them.
- */
+// It is generally preferable to denoise luma and chroma differently, so the 
+// user variables for luma and chroma are split.
+
+// Denoising factor (level of blur, higher means more blur)
 #ifdef LUMA_raw
 #define S 2.0
-#define P 3
-#define R 5
 #else
 #define S 5.0
-#define P 3
-#define R 5
 #endif
 
 /* Adaptive sharpening
@@ -380,11 +366,16 @@ vec4 hook()
  * Uses the blur incurred by denoising to perform an unsharp mask, and uses the 
  * weight map to restrict the sharpening to edges.
  *
- * Use M=4 to get a good look at which areas are/aren't sharpened.
+ * If you just want to increase/decrease sharpness then you want to change ASF.
  *
- * AS: 2 for sharpening, 1 for sharpening+denoising, 0 to disable
- * ASF: Sharpening factor, higher numbers make a sharper underlying image
- * ASP: Weight power, higher numbers use more of the sharp image
+ * Use V=4 to visualize which areas are sharpened (black means sharpen).
+ *
+ * AS:
+ * 	- 0 to disable
+ * 	- 1 to sharpen+denoise
+ * 	- 2 to sharpen only
+ * ASF: Higher numbers make a sharper image
+ * ASP: Higher numbers use more of the sharp image
  * ASW:
  * 	- 0 to use pre-WD weights
  * 	- 1 to use post-WD weights (ASP should be ~2x to compensate)
@@ -396,15 +387,15 @@ vec4 hook()
  */
 #ifdef LUMA_raw
 #define AS 0
-#define ASF 2.0
-#define ASP 4.0
+#define ASF 3.0
+#define ASP 1.0
 #define ASW 0
 #define ASK 1
 #define ASC 0.0
 #else
 #define AS 0
-#define ASF 2.0
-#define ASP 4.0
+#define ASF 3.0
+#define ASP 1.0
 #define ASW 0
 #define ASK 1
 #define ASC 0.0
@@ -412,12 +403,10 @@ vec4 hook()
 
 /* Starting weight
  *
- * Lower numbers give less weight to the pixel-of-interest, which may help 
- * handle higher noise levels, ringing, and may be useful for other things too?
+ * Also known as the center weight. This represents the weight of the 
+ * pixel-of-interest. Lower numbers may help handle heavy noise & ringing.
  *
- * EPSILON should be used instead of zero to avoid divide-by-zero errors. The 
- * avg_weight/old_avg_weight variables may be used to make SW adapt to the 
- * local noise level, e.g., SW=max(avg_weight, EPSILON)
+ * EPSILON should be used instead of zero to avoid divide-by-zero errors.
  */
 #ifdef LUMA_raw
 #define SW 1.0
@@ -432,7 +421,7 @@ vec4 hook()
  * result, especially around edges.
  * 
  * WD:
- * 	- 2: True average. Very good quality, but slower and uses more memory.
+ * 	- 2: True average. Better quality, but slower and requires GLSL 4.0 or later
  * 	- 1: Moving cumulative average. Inaccurate, tends to blur directionally.
  * 	- 0: Disable
  *
@@ -451,12 +440,14 @@ vec4 hook()
 
 /* Extremes preserve
  *
- * Reduces denoising around very bright/dark areas. The downscaling factor of 
- * EP (located near the top of this shader) controls the area sampled for 
- * luminance (higher numbers consider more area).
+ * Reduces denoising around very bright/dark areas.
+ *
+ * The downscaling factor of the EP shader stage affects what is considered a 
+ * bright/dark area. The default of 3 should be fine, it's not recommended to 
+ * change this.
  *
  * This is incompatible with RGB. If you have RGB hooks enabled then you will 
- * have to delete the EP shader stage or specify EP=0 through nlmeans_cfg.
+ * have to delete the EP shader stage or specify EP=0 through shader_cfg.
  *
  * EP: 1 to enable, 0 to disable
  * DP: EP strength on dark patches, 0 to fully denoise
@@ -478,25 +469,26 @@ vec4 hook()
 /* ADVANCED OPTIONS * ADVANCED OPTIONS * ADVANCED OPTIONS * ADVANCED OPTIONS */
 /* ADVANCED OPTIONS * ADVANCED OPTIONS * ADVANCED OPTIONS * ADVANCED OPTIONS */
 
-/* Robust filtering
+/* Patch & research sizes
  *
- * This setting is dependent on code generation from nlmeans_cfg, so this 
- * setting can only be enabled via nlmeans_cfg.
+ * Patch size should be an odd number greater than or equal to 3. Higher values 
+ * are slower and not always better.
  *
- * Compares the pixel-of-interest against a guide, which could be a downscaled 
- * image or the output of another shader such as guided.glsl
+ * Research size be an odd number greater than or equal to 3. Higher values are 
+ * generally better, but slower, blurrier, and gives diminishing returns.
  */
 #ifdef LUMA_raw
-#define RF 1
+#define P 3
+#define R 5
 #else
-#define RF 1
+#define P 3
+#define R 5
 #endif
 
-/* Search shape
+/* Patch and research shapes
  *
- * Determines the shape of patches and research zones. Different shapes have 
- * different speed and quality characteristics. Every shape (besides square) is 
- * smaller than square.
+ * Different shapes have different speed and quality characteristics. Every 
+ * shape (besides square) is smaller than square.
  *
  * PS applies applies to patches, RS applies to research zones.
  *
@@ -519,11 +511,22 @@ vec4 hook()
 #define PS 3
 #endif
 
+/* Robust filtering
+ *
+ * This setting is dependent on code generation from shader_cfg, so this 
+ * setting can only be enabled via shader_cfg.
+ *
+ * Compares the pixel-of-interest against a guide, which could be a downscaled 
+ * image or the output of another shader
+ */
+#define RF_LUMA 1
+#define RF 1
+
 /* Rotational/reflectional invariance
  *
- * Number of rotations/reflections to try for each patch comparison. Slow, but 
- * improves feature preservation, although adding more rotations/reflections 
- * gives diminishing returns. The most similar rotation/reflection will be used.
+ * Number of rotations/reflections to try for each patch comparison. Can be 
+ * slow, but improves feature preservation. More rotations/reflections gives 
+ * diminishing returns. The most similar rotation/reflection will be used.
  *
  * The angle in degrees of each rotation is 360/(RI+1), so RI=1 will do a 
  * single 180 degree rotation, RI=3 will do three 90 degree rotations, etc.
@@ -541,28 +544,38 @@ vec4 hook()
 
 /* Temporal denoising
  *
+ * This setting is dependent on code generation from shader_cfg, so this 
+ * setting can only be enabled via shader_cfg.
+ *
  * Caveats:
- * 	- Slower, each frame needs to be researched
- * 	- Requires vo=gpu-next and nlmeans_temporal.glsl
+ * 	- Slower:
+ * 		- Each frame needs to be researched (more samples & more math)
+ * 		- Gather optimizations only apply to the current frame
+ * 	- Requires vo=gpu-next
  * 	- Luma-only (this is a bug)
  * 	- Buggy
  *
- * Gather samples across multiple frames. May cause motion blur and may 
- * struggle more with noise that persists across multiple frames (e.g., from 
- * compression or duplicate frames), but can work very well on high quality 
- * video.
+ * May cause motion blur and may struggle more with noise that persists across 
+ * multiple frames (e.g., from compression or duplicate frames), but can work 
+ * very well on high quality video.
  *
  * Motion estimation (ME) should improve quality without impacting speed.
  *
  * T: number of frames used
  * ME: motion estimation, 0 for none, 1 for max weight, 2 for weighted avg
+ * MEF: estimate factor, compensates for ME being one frame behind
+ * TRF: compare against the denoised frames
  */
 #ifdef LUMA_raw
 #define T 0
 #define ME 1
+#define MEF 2
+#define TRF 0
 #else
 #define T 0
 #define ME 0
+#define MEF 2
+#define TRF 0
 #endif
 
 /* Spatial kernel
@@ -574,27 +587,55 @@ vec4 hook()
  * closer/further, for instance SD=(1,1,0.5) would make the temporal axis 
  * appear closer and increase blur between frames.
  *
- * The intra-patch variants do not yet have well-understood effects. They are 
- * intended to make large patch sizes more useful. Likely slower.
+ * The intra-patch variants are supposed to help with larger patch sizes.
  *
- * SS: spatial denoising factor
+ * SST: enables spatial kernel if R>=PST, 0 fully disables
+ * SS: spatial sigma
  * SD: spatial distortion (X, Y, time)
- * PSS: intra-patch spatial denoising factor
+ * PSS: intra-patch spatial sigma
  * PST: enables intra-patch spatial kernel if P>=PST, 0 fully disables
  * PSD: intra-patch spatial distortion (X, Y)
  */
 #ifdef LUMA_raw
+#define SST 1
 #define SS 0.25
-#define SD vec3(1,1,1.5)
+#define SD vec3(1,1,1)
 #define PST 0
 #define PSS 0.0
 #define PSD vec2(1,1)
 #else
+#define SST 1
 #define SS 0.25
-#define SD vec3(1,1,1.5)
+#define SD vec3(1,1,1)
 #define PST 0
 #define PSS 0.0
 #define PSD vec2(1,1)
+#endif
+
+/* Kernels
+ *
+ * SK: spatial kernel
+ * RK: range kernel (takes patch differences)
+ * PSK: intra-patch spatial kernel
+ *
+ * List of available kernels:
+ *
+ * bicubic
+ * cos
+ * gaussian
+ * lanczos
+ * quadratic
+ * sinc
+ * sphinx
+ */
+#ifdef LUMA_raw
+#define SK gaussian
+#define RK gaussian
+#define PSK gaussian
+#else
+#define SK gaussian
+#define RK gaussian
+#define PSK gaussian
 #endif
 
 // Scaling factor (should match WIDTH/HEIGHT)
@@ -604,39 +645,21 @@ vec4 hook()
 #define SF 1
 #endif
 
-/* Estimator
+/* Visualization
  *
- * 0: means
- * 1: Euclidean medians (extremely slow, may be good for heavy noise)
- * 2: weight map (not a denoiser, maybe useful for generating image masks)
- * 3: weighted median intensity (slow, may be good for heavy noise)
+ * 0: off
+ * 1: absolute difference between input/output to the power of 0.25
+ * 2: difference between input/output centered on 0.5
+ * 3: avg_weight
  * 4: edge map (based on the relevant AS settings)
  */
 #ifdef LUMA_raw
-#define M 0
+#define V 0
 #else
-#define M 0
+#define V 0
 #endif
 
-/* Difference visualization
- *
- * Visualizes the difference between input/output image
- *
- * 0: off
- * 1: absolute difference scaled by S
- * 2: difference centered on 0.5
- */
-#ifdef LUMA_raw
-#define DV 0
-#else
-#define DV 0
-#endif
-
-/* Blur factor
- *
- * 0 to 1, only useful for alternative estimators. You're probably looking for 
- * "S" (denoising factor), go back to the top of the shader!
- */
+// Blur factor (0.0 returns the input image, 1.0 returns the output image)
 #ifdef LUMA_raw
 #define BF 1.0
 #else
@@ -657,17 +680,57 @@ vec4 hook()
 #define PD 0
 #endif
 
-// Duplicate 1st weight (for LGC)
+// Duplicate 1st weight (for luma-guided-chroma)
 #ifdef LUMA_raw
 #define D1W 0
 #else
 #define D1W 0
 #endif
 
-/* Shader code */
+// Skip patch comparison
+#ifdef LUMA_raw
+#define SKIP_PATCH 0
+#else
+#define SKIP_PATCH 0
+#endif
+
+// Shader code
 
 #define EPSILON 0.00000000001
 #define M_PI 3.14159265358979323846
+#define POW2(x) ((x)*(x))
+#define POW3(x) ((x)*(x)*(x))
+#define bicubic(x) ((1.0/6.0) * (POW3((x)+2) - 4 * POW3((x)+1) + 6 * POW3(x) - 4 * POW3(max((x)-1, 0))))
+#define gaussian(x) exp(-1 * POW2(x))
+#define lanczos(x) POW2(sinc(x))
+#define quadratic(x) ((x) < 0.5 ? 0.75 - POW2(x) : 0.5 * POW2((x) - 1.5))
+#define sinc(x) ((x) < 1e-8 ? 1.0 : sin((x)*M_PI) / ((x)*M_PI))
+#define sphinx(x) ((x) < 1e-8 ? 1.0 : 3.0 * (sin((x)*M_PI) - (x)*M_PI * cos((x)*M_PI)) / POW3((x)*M_PI))
+
+// XXX could maybe be better optimized on LGC
+// XXX return original alpha component instead of 1.0
+#if defined(LUMA_raw)
+#define val float
+#define val_swizz(v) (v.x)
+#define unval(v) vec4(v.x, 0, 0, 1.0)
+#define val_packed val
+#define val_pack(v) (v)
+#define val_unpack(v) (v)
+#elif defined(CHROMA_raw)
+#define val vec2
+#define val_swizz(v) (v.xy)
+#define unval(v) vec4(v.x, v.y, 0, 1.0)
+#define val_packed uint
+#define val_pack(v) packUnorm2x16(v)
+#define val_unpack(v) unpackUnorm2x16(v)
+#else
+#define val vec3
+#define val_swizz(v) (v.xyz)
+#define unval(v) vec4(v.x, v.y, v.z, 1.0)
+#define val_packed val
+#define val_pack(v) (v)
+#define val_unpack(v) (v)
+#endif
 
 #if PS == 6
 const int hp = P/2;
@@ -682,39 +745,96 @@ const float hr = int(R/2) - 0.5*(1-(R%2)); // sample between pixels for even res
 #endif
 
 // donut increment, increments without landing on (0,0,0)
-// much faster than a "continue" statement
+// much faster than a continue statement
 #define DINCR(z,c) (z.c++,(z.c += int(z == vec3(0))))
 
-// search shapes and their corresponding areas
-#define S_1X1(z) for (z = vec3(0); z.x <= 0; z.x++)
+// patch/research shapes
+// each shape is depicted in a comment, where Z=5 (Z corresponds to P or R)
+// dots (.) represent samples (pixels) and X represents the pixel-of-interest
 
+// Z    .....
+// Z    .....
+// Z    ..X..
+// Z    .....
+// Z    .....
+#define S_SQUARE(z,hz,incr) for (z.x = -hz; z.x <= hz; z.x++) for (z.y = -hz; z.y <= hz; incr)
+
+// (in this instance Z=4)
+// Z    ....
+// Z    ....
+// Z    ..X.
+// Z    ....
+#define S_SQUARE_EVEN(z,hz,incr) for (z.x = -hz; z.x < hz; z.x++) for (z.y = -hz; z.y < hz; incr)
+
+// Z-4    .
+// Z-2   ...
+// Z    ..X..
 #define S_TRIANGLE(z,hz,incr) for (z.y = -hz; z.y <= 0; z.y++) for (z.x = -abs(abs(z.y) - hz); z.x <= abs(abs(z.y) - hz); incr)
+
+// Z-4    .
+// Z-2   ...
+// hz+1 ..X
 #define S_TRUNC_TRIANGLE(z,hz,incr) for (z.y = -hz; z.y <= 0; z.y++) for (z.x = -abs(abs(z.y) - hz); z.x <= abs(abs(z.y) - hz)*int(z.y!=0); incr)
 #define S_TRIANGLE_A(hz,Z) int(hz*hz+Z)
 
+// Z-4    .
+// Z-2   ...
+// Z    ..X..
+// Z-2   ...
+// Z-4    .
 #define S_DIAMOND(z,hz,incr) for (z.x = -hz; z.x <= hz; z.x++) for (z.y = -abs(abs(z.x) - hz); z.y <= abs(abs(z.x) - hz); incr)
 #define S_DIAMOND_A(hz,Z) int(hz*hz*2+Z)
 
-#define S_VERTICAL(z,hz,incr) for (z.x = 0; z.x <= 0; z.x++) for (z.y = -hz; z.y <= hz; incr)
+//
+// Z    ..X..
+//
 #define S_HORIZONTAL(z,hz,incr) for (z.x = -hz; z.x <= hz; incr) for (z.y = 0; z.y <= 0; z.y++)
 
+// 90 degree rotation of S_HORIZONTAL
+#define S_VERTICAL(z,hz,incr) for (z.x = 0; z.x <= 0; z.x++) for (z.y = -hz; z.y <= hz; incr)
+
+// 1      .
+// 1      . 
+// Z    ..X..
+// 1      . 
+// 1      .
 #define S_PLUS(z,hz,incr) for (z.x = -hz; z.x <= hz; z.x++) for (z.y = -hz * int(z.x == 0); z.y <= hz * int(z.x == 0); incr)
 #define S_PLUS_A(hz,Z) (Z*2 - 1)
 
-#define S_SQUARE(z,hz,incr) for (z.x = -hz; z.x <= hz; z.x++) for (z.y = -hz; z.y <= hz; incr)
-#define S_SQUARE_EVEN(z,hz,incr) for (z.x = -hz; z.x < hz; z.x++) for (z.y = -hz; z.y < hz; incr)
+// XXX implement S_PLUS w/ an X overlayed:
+// 3    . . .
+// 3     ...
+// Z    ..X..
+// 3     ...
+// 3    . . .
+
+// XXX implement an X shape:
+// 2    .   .
+// 2     . .
+// 1      X  
+// 2     . .
+// 2    .   .
+
+// 1x1 square
+#define S_1X1(z) for (z = vec3(0); z.x <= 0; z.x++)
 
 #define T1 (T+1)
 #define FOR_FRAME(r) for (r.z = 0; r.z < T1; r.z++)
 
+#ifdef LUMA_raw
+#define RF_ RF_LUMA
+#else
+#define RF_ RF
+#endif
+
 // Skip comparing the pixel-of-interest against itself, unless RF is enabled
-#if RF
+#if RF_
 #define RINCR(z,c) (z.c++)
 #else
 #define RINCR DINCR
 #endif
 
-#define R_AREA(a) (a * T1 + RF-1)
+#define R_AREA(a) (a * T1 + RF_-1)
 
 // research shapes
 // XXX would be nice to have the option of temporally-varying research sizes
@@ -803,44 +923,44 @@ const int p_area = P_AREA(P*P);
 const float r_scale = 1.0/r_area;
 const float p_scale = 1.0/p_area;
 
-#define load_(off)  HOOKED_tex(HOOKED_pos + HOOKED_pt * vec2(off))
+#define sample(tex, pos, size, pt, off) tex(pos + pt * (vec2(off) + 0.5 - fract(pos*size)))
+#define load_(off) sample(HOOKED_tex, HOOKED_pos, HOOKED_size, HOOKED_pt, off)
 
-#if RF && defined(LUMA_raw)
-#define load2_(off) RF_LUMA_tex(RF_LUMA_pos + RF_LUMA_pt * vec2(off))
+#if RF_ && defined(LUMA_raw)
+#define load2_(off) sample(RF_LUMA_tex, RF_LUMA_pos, RF_LUMA_size, RF_LUMA_pt, off)
 #define gather_offs(off, off_arr) (RF_LUMA_mul * vec4(textureGatherOffsets(RF_LUMA_raw, RF_LUMA_pos + vec2(off) * RF_LUMA_pt, off_arr)))
 #define gather(off) RF_LUMA_gather(RF_LUMA_pos + (off) * RF_LUMA_pt, 0)
-#elif RF && D1W
-#define load2_(off) RF_tex(RF_pos + RF_pt * vec2(off))
+#elif RF_ && D1W
+#define load2_(off) sample(RF_tex, RF_pos, RF_size, RF_pt, off)
 #define gather_offs(off, off_arr) (RF_mul * vec4(textureGatherOffsets(RF_raw, RF_pos + vec2(off) * RF_pt, off_arr)))
 #define gather(off) RF_gather(RF_pos + (off) * RF_pt, 0)
-#elif RF
-#define load2_(off) RF_tex(RF_pos + RF_pt * vec2(off))
+#elif RF_
+#define load2_(off) sample(RF_tex, RF_pos, RF_size, RF_pt, off)
 #else
-#define load2_(off) HOOKED_tex(HOOKED_pos + HOOKED_pt * vec2(off))
+#define load2_(off) load_(off)
 #define gather_offs(off, off_arr) (HOOKED_mul * vec4(textureGatherOffsets(HOOKED_raw, HOOKED_pos + vec2(off) * HOOKED_pt, off_arr)))
 #define gather(off) HOOKED_gather(HOOKED_pos + (off)*HOOKED_pt, 0)
 #endif
 
 #if T
-vec4 load(vec3 off)
+val load(vec3 off)
 {
-	switch (int(off.z)) {
-	case 0: return load_(off);
+	switch (min(int(off.z), frame)) {
+	case 0: return val_swizz(load_(off));
+
 	}
 }
-vec4 load2(vec3 off)
+val load2(vec3 off)
 {
-	switch (int(off.z)) {
-	case 0: return load2_(off);
-	}
+	return off.z == 0 ? val_swizz(load2_(off)) : load(off);
 }
 #else
-#define load(off) load_(off)
-#define load2(off) load2_(off)
+#define load(off) val_swizz(load_(off))
+#define load2(off) val_swizz(load2_(off))
 #endif
 
-vec4 poi = load(vec3(0)); // pixel-of-interest
-vec4 poi2 = load2(vec3(0)); // guide pixel-of-interest
+val poi = load(vec3(0)); // pixel-of-interest
+val poi2 = load2(vec3(0)); // guide pixel-of-interest
 
 #if RI // rotation
 vec2 rot(vec2 p, float d)
@@ -867,22 +987,52 @@ vec2 ref(vec2 p, int d)
 #define ref(p, d) (p)
 #endif
 
-vec4 patch_comparison(vec3 r, vec3 r2)
+#if SST && R >= SST
+float spatial_r(vec3 v)
+{
+	v.xy += 0.5 - fract(HOOKED_pos*HOOKED_size);
+	return SK(length(v*SD)*SS);
+}
+#else
+#define spatial_r(v) (1)
+#endif
+
+#if PST && P >= PST
+#define spatial_p(v) PSK(length(v*PSD)*PSS)
+#else
+#define spatial_p(v) (1)
+#endif
+
+val range(val pdiff_sq)
+{
+	const float h = S*0.013;
+	const float pdiff_scale = 1.0/(h*h);
+	pdiff_sq = sqrt(pdiff_sq * pdiff_scale);
+#if defined(LUMA_raw)
+	return RK(pdiff_sq);
+#elif defined(CHROMA_raw)
+	return vec2(RK(pdiff_sq.x), RK(pdiff_sq.y));
+#else
+	return vec3(RK(pdiff_sq.x), RK(pdiff_sq.y), RK(pdiff_sq.z));
+#endif
+	//return exp(-pdiff_sq * pdiff_scale);
+
+	// weight function from the NLM paper, it's not very good
+	//return exp(-max(pdiff_sq - 2*S*S, 0.0) * pdiff_scale);
+}
+
+val patch_comparison(vec3 r, vec3 r2)
 {
 	vec3 p;
-	vec4 min_rot = vec4(p_area);
+	val min_rot = val(p_area);
 
 	FOR_ROTATION FOR_REFLECTION {
-		vec4 pdiff_sq = vec4(0);
+		val pdiff_sq = val(0);
 		FOR_PATCH(p) {
 			vec3 transformed_p = vec3(ref(rot(p.xy, ri), rfi), p.z);
-			vec4 diff_sq = load2(p + r2) - load2((transformed_p + r) * SF);
+			val diff_sq = load2(p + r2) - load2((transformed_p + r) * SF);
 			diff_sq *= diff_sq;
-#if PST && P >= PST
-			float pdist = length(p.xy*PSD)*PSS;
-			pdist = exp(-(pdist*pdist));
-			diff_sq = pow(max(diff_sq, EPSILON), vec4(pdist));
-#endif
+			diff_sq = 1 - (1 - diff_sq) * spatial_p(p.xy);
 			pdiff_sq += diff_sq;
 		}
 		min_rot = min(min_rot, pdiff_sq);
@@ -894,14 +1044,15 @@ vec4 patch_comparison(vec3 r, vec3 r2)
 #define NO_GATHER (PD == 0 && NG == 0) // never textureGather if any of these conditions are false
 #define REGULAR_ROTATIONS (RI == 0 || RI == 1 || RI == 3)
 
-#if (defined(LUMA_gather) || D1W) && ((PS == 3 || PS == 7) && P == 3) && PST == 0 && M != 1 && REGULAR_ROTATIONS && NO_GATHER
+#if (defined(LUMA_gather) || D1W) && ((PS == 3 || PS == 7) && P == 3) && PST == 0 && REGULAR_ROTATIONS && NO_GATHER
 // 3x3 diamond/plus patch_comparison_gather
 // XXX extend to support arbitrary sizes (probably requires code generation)
 // XXX extend to support 3x3 square
+// XXX support PSS
 const ivec2 offsets[4] = { ivec2(0,-1), ivec2(-1,0), ivec2(0,1), ivec2(1,0) };
 const ivec2 offsets_sf[4] = { ivec2(0,-1) * SF, ivec2(-1,0) * SF, ivec2(0,1) * SF, ivec2(1,0) * SF };
 vec4 poi_patch = gather_offs(0, offsets);
-vec4 patch_comparison_gather(vec3 r, vec3 r2)
+float patch_comparison_gather(vec3 r, vec3 r2)
 {
 	float min_rot = p_area - 1;
 	vec4 transformer = gather_offs(r, offsets_sf);
@@ -925,13 +1076,12 @@ vec4 patch_comparison_gather(vec3 r, vec3 r2)
 	}
 	float center_diff_sq = poi2.x - load2(r).x;
 	center_diff_sq *= center_diff_sq;
-	return vec4(min_rot + center_diff_sq, 0, 0, 0) * p_scale;
+	return (min_rot + center_diff_sq) * p_scale;
 }
-#elif (defined(LUMA_gather) || D1W) && PS == 6 && REGULAR_ROTATIONS && NO_GATHER
+#elif (defined(LUMA_gather) || D1W) && PS == 6 && RI == 0 && RFI == 0 && NO_GATHER
 // tiled even square patch_comparison_gather
 // XXX extend to support odd square?
-// XXX rotations/reflections appear to be subtly broken
-vec4 patch_comparison_gather(vec3 r, vec3 r2)
+float patch_comparison_gather(vec3 r, vec3 r2)
 {
 	vec2 tile;
 	float min_rot = p_area;
@@ -940,40 +1090,17 @@ vec4 patch_comparison_gather(vec3 r, vec3 r2)
 	 * w z
 	 * x y
 	 */
-	FOR_ROTATION FOR_REFLECTION {
-		float pdiff_sq = 0;
-		for (tile.x = -hp; tile.x < hp; tile.x+=2) for (tile.y = -hp; tile.y < hp; tile.y+=2) {
-			vec4 poi_patch = gather(tile + r2.xy);
-			vec4 transformer = gather(ref(rot(tile + 0.5, ri), rfi) - 0.5 + r.xy);
-
-#if RI
-			for (float i = 0; i < ri; i+=90)
-				transformer = transformer.wxyz; // rotate 90 degrees
-#endif
-#if RFI // XXX output is a little off
-			switch(rfi) {
-			case 1: transformer = transformer.zyxw; break;
-			case 2: transformer = transformer.xwzy; break;
-			}
-#endif
-
-			vec4 diff_sq = (poi_patch - transformer) * (poi_patch - transformer);
-#if PST && P >= PST
-			// XXX refactor to avoid pow (should probably break off into a function)
-			vec4 pdist = vec4(
-				exp(-pow(length((tile+vec2(0,1))*PSD)*PSS, 2)),
-				exp(-pow(length((tile+vec2(1,1))*PSD)*PSS, 2)),
-				exp(-pow(length((tile+vec2(1,0))*PSD)*PSS, 2)),
-				exp(-pow(length((tile+vec2(0,0))*PSD)*PSS, 2))
-			);
-			diff_sq = pow(max(diff_sq, EPSILON), pdist);
-#endif
-			pdiff_sq += dot(diff_sq, vec4(1));
-		}
-		min_rot = min(min_rot, pdiff_sq);
+	float pdiff_sq = 0;
+	for (tile.x = -hp; tile.x < hp; tile.x+=2) for (tile.y = -hp; tile.y < hp; tile.y+=2) {
+		vec4 diff_sq = gather(tile + r.xy) - gather(tile + r2.xy);
+		diff_sq *= diff_sq;
+		diff_sq = 1 - (1 - diff_sq) * vec4(spatial_p(tile+vec2(0,1)), spatial_p(tile+vec2(1,1)),
+			                                 spatial_p(tile+vec2(1,0)), spatial_p(tile+vec2(0,0)));
+		pdiff_sq += dot(diff_sq, vec4(1));
 	}
+	min_rot = min(min_rot, pdiff_sq);
 
-	return vec4(min_rot, 0, 0, 0) * p_scale;
+	return min_rot * p_scale;
 }
 #else
 #define patch_comparison_gather patch_comparison
@@ -981,9 +1108,9 @@ vec4 patch_comparison_gather(vec3 r, vec3 r2)
 
 vec4 hook()
 {
-	vec4 total_weight = vec4(0);
-	vec4 sum = vec4(0);
-	vec4 result = vec4(0);
+	val total_weight = val(0);
+	val sum = val(0);
+	val result = val(0);
 
 	vec3 r = vec3(0);
 	vec3 p = vec3(0);
@@ -997,41 +1124,38 @@ vec4 hook()
 	float me_weight = 0;
 #endif
 
-#if WD == 2 || M == 3 // weight discard, weighted median intensities
+#if WD == 2 // weight discard
 	int r_index = 0;
-	vec4 all_weights[r_area];
-	vec4 all_pixels[r_area];
+	val_packed all_weights[r_area];
+	val_packed all_pixels[r_area];
 #elif WD == 1 // weight discard
-	vec4 no_weights = vec4(0);
-	vec4 discard_total_weight = vec4(0);
-	vec4 discard_sum = vec4(0);
-#endif
-
-#if M == 1 // Euclidean medians
-	vec4 minsum = vec4(0);
+	val no_weights = val(0);
+	val discard_total_weight = val(0);
+	val discard_sum = val(0);
 #endif
 
 	FOR_FRAME(r) {
 	// XXX ME is always a frame behind, should have to option to re-research after applying ME (could do it an arbitrary number of times per frame if desired)
 #if T && ME == 1 // temporal & motion estimation max weight
 	if (r.z > 0) {
-		me += me_tmp;
+		me += me_tmp * MEF;
 		me_tmp = vec3(0);
 		maxweight = 0;
 	}
 #elif T && ME == 2 // temporal & motion estimation weighted average
 	if (r.z > 0) {
-		me += round(me_sum / me_weight);
+		me += round(me_sum / me_weight * MEF);
 		me_sum = vec3(0);
 		me_weight = 0;
 	}
 #endif
-	FOR_RESEARCH(r) {
-		// main NLM logic
-		const float h = S*0.013;
-		const float pdiff_scale = 1.0/(h*h);
-		vec4 pdiff_sq = (r.z == 0) ? patch_comparison_gather(r+me, vec3(0)) : patch_comparison(r+me, vec3(0));
-		vec4 weight = exp(-pdiff_sq * pdiff_scale);
+	FOR_RESEARCH(r) { // main NLM logic
+#if SKIP_PATCH
+		val weight = val(1);
+#else
+		val pdiff_sq = (r.z == 0) ? val(patch_comparison_gather(r+me, vec3(0))) : patch_comparison(r+me, vec3(0));
+		val weight = range(pdiff_sq);
+#endif
 
 #if T && ME == 1 // temporal & motion estimation max weight
 		me_tmp = vec3(r.xy,0) * step(maxweight, weight.x) + me_tmp * (1 - step(maxweight, weight.x));
@@ -1042,18 +1166,18 @@ vec4 hook()
 #endif
 
 #if D1W
-		weight = vec4(weight.x);
+		weight = val(weight.x);
 #endif
 
-		weight *= exp(-(length(r*SD)*SS * length(r*SD)*SS)); // spatial kernel
+		weight *= spatial_r(r);
 
-#if WD == 2 || M == 3 // weight discard, weighted median intensity
-		all_weights[r_index] = weight;
-		all_pixels[r_index] = load(r+me);
+#if WD == 2 // weight discard
+		all_weights[r_index] = val_pack(weight);
+		all_pixels[r_index] = val_pack(load(r+me));
 		r_index++;
 #elif WD == 1 // weight discard
-		vec4 wd_scale = 1.0/max(no_weights, 1);
-		vec4 keeps = step(total_weight*wd_scale * WDT*exp(-wd_scale*WDP), weight);
+		val wd_scale = 1.0/max(no_weights, 1);
+		val keeps = step(total_weight*wd_scale * WDT*exp(-wd_scale*WDP), weight);
 		discard_sum += load(r+me) * weight * (1 - keeps);
 		discard_total_weight += weight * (1 - keeps);
 		no_weights += keeps;
@@ -1061,45 +1185,25 @@ vec4 hook()
 
 		sum += load(r+me) * weight;
 		total_weight += weight;
-
-#if M == 1 // Euclidean median
-		// Based on: https://arxiv.org/abs/1207.3056
-		// XXX might not work with ME
-		vec3 r2;
-		vec4 wpdist_sum = vec4(0);
-		FOR_FRAME(r2) FOR_RESEARCH(r2) {
-			vec4 pdist = (r.z + r2.z) == 0 ? patch_comparison_gather(r+me, r2+me) : patch_comparison(r+me, r2+me);
-			wpdist_sum += sqrt(pdist) * (1-weight);
-		}
-
-		vec4 newmin = step(wpdist_sum, minsum); // wpdist_sum <= minsum
-		newmin *= 1 - step(wpdist_sum, vec4(0)); // && wpdist_sum > 0
-		newmin += step(minsum, vec4(0)); // || minsum <= 0
-		newmin = min(newmin, 1);
-
-		minsum = (newmin * wpdist_sum) + ((1-newmin) * minsum);
-		result = (newmin * load(r+me)) + ((1-newmin) * result);
-#endif
 	} // FOR_RESEARCH
 	} // FOR_FRAME
 
-	// XXX optionally put the denoised pixel into the frame buffer?
-#if T // temporal
-#endif
-
-	vec4 avg_weight = total_weight * r_scale;
-	vec4 old_avg_weight = avg_weight;
+	val avg_weight = total_weight * r_scale;
+	val old_avg_weight = avg_weight;
 
 #if WD == 2 // true average
-	total_weight = vec4(0);
-	sum = vec4(0);
-	vec4 no_weights = vec4(0);
+	total_weight = val(0);
+	sum = val(0);
+	val no_weights = val(0);
 
 	for (int i = 0; i < r_area; i++) {
-		vec4 keeps = step(avg_weight*WDT, all_weights[i]);
-		all_weights[i] *= keeps;
-		sum += all_pixels[i] * all_weights[i];
-		total_weight += all_weights[i];
+		val w = val_unpack(all_weights[i]);
+		val px = val_unpack(all_pixels[i]);
+		val keeps = step(avg_weight*WDT, w);
+
+		w *= keeps;
+		sum += px * w;
+		total_weight += w;
 		no_weights += keeps;
 	}
 #elif WD == 1 // moving cumulative average
@@ -1110,29 +1214,23 @@ vec4 hook()
 	avg_weight = total_weight / no_weights;
 #endif
 
-	total_weight += SW;
-	sum += poi * SW;
+	total_weight += SW * spatial_r(vec3(0));
+	sum += poi * SW * spatial_r(vec3(0));
 
-#if M == 3 // weighted median intensity
-	const float hr_area = r_area/2.0;
-	vec4 is_median, gt, lt, gte, lte, neq;
+#if V == 3 // weight map
+	result = val(avg_weight);
+#else // mean
+	result = val(sum / total_weight);
+#endif
 
-	for (int i = 0; i < r_area; i++) {
-		gt = lt = vec4(0);
-		for (int j = 0; j < r_area; j++) {
-			gte = step(all_pixels[i]*all_weights[i], all_pixels[j]*all_weights[j]);
-			lte = step(all_pixels[j]*all_weights[j], all_pixels[i]*all_weights[i]);
-			neq = 1 - gte * lte;
-			gt += gte * neq;
-			lt += lte * neq;
-		}
-		is_median = step(gt, vec4(hr_area)) * step(lt, vec4(hr_area));
-		result += step(result, vec4(0)) * is_median * all_pixels[i];
-	}
-#elif M == 2 // weight map
-	result = avg_weight;
-#elif M == 0 // mean
-	result = sum / total_weight;
+	// store frames for temporal
+#if T > 1
+
+#endif
+#if T && TRF
+	imageStore(PREV1, ivec2(HOOKED_pos*imageSize(PREV1)), unval(result));
+#elif T
+	imageStore(PREV1, ivec2(HOOKED_pos*imageSize(PREV1)), unval(poi2));
 #endif
 
 #if ASW == 0 // pre-WD weights
@@ -1142,22 +1240,20 @@ vec4 hook()
 #endif
 
 #if ASK == 0
-	vec4 sharpening_strength = pow(AS_weight, vec4(ASP));
+	val sharpening_strength = pow(AS_weight, val(ASP));
 #elif ASK == 1
-#define sigmoid(x) (tanh(x * 2*M_PI - M_PI)*0.5+0.5)
-	vec4 sharpening_strength = mix(pow(sigmoid(AS_weight), vec4(ASP)),
-	                               AS_weight, ASC);
-	// just in case ASC < 0 (will sharpen but it's janky XXX)
-	sharpening_strength = clamp(sharpening_strength, 0.0, 1.0);
+	val sharpening_strength = mix(
+			pow(smoothstep(0.0, 1.0, AS_weight), val(ASP)),
+			AS_weight, ASC);
+	// XXX normalize the result to account for a negative ASC?
 #elif ASK == 2
-	vec4 sharpening_strength = vec4(ASP);
+	val sharpening_strength = val(ASP);
 #endif
 
-	// XXX maybe allow for alternative blurs? e.g., replace result w/ load2?
 #if AS == 1 // sharpen+denoise
-	vec4 sharpened = result + (poi - result) * ASF;
+	val sharpened = result + (poi - result) * ASF;
 #elif AS == 2 // sharpen only
-	vec4 sharpened = poi + (poi - result) * ASF;
+	val sharpened = poi + (poi - result) * ASF;
 #endif
 
 #if EP // extremes preserve
@@ -1173,20 +1269,20 @@ vec4 hook()
 	result = mix(sharpened, poi, sharpening_strength);
 #endif
 
-#if M == 4 // edge map
+#if V == 4 // edge map
 	result = sharpening_strength;
 #endif
 
-#if (M == 2 || M == 4) && defined(CHROMA_raw) // drop chroma for weight maps
-	result = vec4(0.5);
+#if (V == 3 || V == 4) && defined(CHROMA_raw) // drop chroma for these visualizations
+	return vec4(0.5);
 #endif
 
-#if DV == 1
-	result = clamp(abs(poi - result) * S, 0.0, 1.0);
-#elif DV == 2
+#if V == 1
+	result = clamp(pow(abs(poi - result), val(0.25)), 0.0, 1.0);
+#elif V == 2
 	result = (poi - result) * 0.5 + 0.5;
 #endif
 
-	return mix(poi, result, BF);
+	return unval(mix(poi, result, BF));
 }
 

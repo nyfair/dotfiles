@@ -3,7 +3,7 @@
 
 import vapoursynth as vs
 from vapoursynth import core
-from k7sfunc import CCD_STD
+import k7sfunc as k7f
 
 clip = video_in
 
@@ -11,9 +11,9 @@ clip = video_in
 # 用户选项 #
 ############
 
-Nr_Lv = 30
-## 彩噪阈值，越高的值降噪效果越明显（涂抹越重）
+Nr_Lv = 30.0
+## 浮点，彩噪阈值，越高的值降噪效果越明显（涂抹越重）
 
-clip = CCD_STD(clip, nr_lv=Nr_Lv)
+clip = k7f.CCD_STD(clip, nr_lv=Nr_Lv)
 
 clip.set_output()

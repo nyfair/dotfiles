@@ -16,7 +16,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-//desc: Luma-guided-chroma denoising.
+// Description: guided_lgc.glsl: Luma-guided-chroma denoising.
 
 /* The radius can be adjusted with the MEANI stage's downscaling factor. 
  * Higher numbers give a bigger radius.
@@ -31,16 +31,17 @@
  */
 
 //!HOOK CHROMA
-//!DESC Guided filter (I)
 //!BIND LUMA
 //!WIDTH LUMA.w
 //!HEIGHT LUMA.h
+//!DESC Guided filter (I, share)
 //!SAVE I
 
 vec4 hook()
 {
 	return LUMA_texOff(0);
 }
+
 
 //!HOOK CHROMA
 //!DESC Guided filter (P)
@@ -57,9 +58,9 @@ vec4 hook()
 //!HOOK CHROMA
 //!DESC Guided filter (MEANI)
 //!BIND I
+//!SAVE MEANI
 //!WIDTH I.w 2.0 /
 //!HEIGHT I.h 2.0 /
-//!SAVE MEANI
 
 vec4 hook()
 {

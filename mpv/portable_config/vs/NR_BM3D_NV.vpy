@@ -11,7 +11,7 @@ clip = video_in
 # 用户选项 #
 ############
 
-Nr_Lv = [5,1,1]
+Nr_Lv = [5,0,0]
 Bs_Ref = 8
 Bs_Out = 7
 Gpu = 0

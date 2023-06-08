@@ -2,14 +2,14 @@
 ### 文档： https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
 ##################################################
 
-__version__ = "0.1.14"
+__version__ = "0.1.20"
 
 __all__ = [
 	"FMT_CHANGE", "FMT_CTRL", "FPS_CHANGE", "FPS_CTRL",
-	"ACNET_STD", "CUGAN_NV", "ESRGAN_NV", "NNEDI3_STD", "WAIFU_NV",
+	"ACNET_STD", "CUGAN_NV", "ESRGAN_DML", "ESRGAN_NV", "NNEDI3_STD", "WAIFU_DML", "WAIFU_NV",
 	"MVT_LQ", "MVT_STD", "MVT_POT", "MVT_MQ", "RIFE_STD", "RIFE_NV", "RIFE_NV_ORT", "SVP_LQ", "SVP_STD", "SVP_HQ", "SVP_PRO",
-	"BM3D_NV", "CCD_STD", "FFT3D_STD", "NLM_STD", "NLM_NV",
-	"AA_NV", "COLOR_P3W_FIX", "DEBAND_STD", "DEINT_LQ", "DEINT_STD", "DEINT_EX", "IVTC_STD", "STAB_STD", "STAB_HQ", "UAI_NV_TRT",
+	"BILA_NV", "BM3D_NV", "CCD_STD", "DFTT_STD", "DFTT_NV", "FFT3D_STD", "NLM_STD", "NLM_NV",
+	"AA_NV", "COLOR_P3W_FIX", "CSC_RB", "DEBAND_STD", "DEINT_LQ", "DEINT_STD", "DEINT_EX", "IVTC_STD", "STAB_STD", "STAB_HQ", "UAI_DML", "UAI_NV_TRT",
 ]
 
 import os
@@ -38,6 +38,7 @@ else :
 
 vs_api = vs.__api_version__.api_major
 
+dfttest2 = None
 nnedi3_resample = None
 QTGMCv2 = None
 vsmlrt = None
@@ -206,6 +207,179 @@ def FMT_CTRL(
 	return output
 
 ##################################################
+## PORT adjust (a3af7cb57cb37747b0667346375536e65b1fed17)
+## 均衡器 # helper
+##################################################
+
+def EQ(
+	input : vs.VideoNode,
+	hue : typing.Optional[float] = None,
+	sat : typing.Optional[float] = None,
+	bright : typing.Optional[float] = None,
+	cont : typing.Optional[float] = None,
+	coring : bool = True,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	core.num_threads = vs_t
+	fmt_src = input.format
+	fmt_cf_in = fmt_src.color_family
+	fmt_bit_in = fmt_src.bits_per_sample
+
+	if hue is not None or sat is not None :
+		hue = 0.0 if hue is None else hue
+		sat = 1.0 if sat is None else sat
+		hue = hue * math.pi / 180.0
+		hue_sin = math.sin(hue)
+		hue_cos = math.cos(hue)
+		gray = 128 << (fmt_bit_in - 8)
+		chroma_min = 0
+		chroma_max = (2 ** fmt_bit_in) - 1
+		if coring:
+			chroma_min = 16 << (fmt_bit_in - 8)
+			chroma_max = 240 << (fmt_bit_in - 8)
+		expr_u = "x {} - {} * y {} - {} * + {} + {} max {} min".format(gray, hue_cos * sat, gray, hue_sin * sat, gray, chroma_min, chroma_max)
+		expr_v = "y {} - {} * x {} - {} * - {} + {} max {} min".format(gray, hue_cos * sat, gray, hue_sin * sat, gray, chroma_min, chroma_max)
+		src_u = input.std.ShufflePlanes(planes=1, colorfamily=vs.GRAY)
+		src_v = input.std.ShufflePlanes(planes=2, colorfamily=vs.GRAY)
+		dst_u = core.std.Expr(clips=[src_u, src_v], expr=expr_u)
+		dst_v = core.std.Expr(clips=[src_u, src_v], expr=expr_v)
+
+		output = core.std.ShufflePlanes(clips=[input, dst_u, dst_v], planes=[0, 0, 0], colorfamily=fmt_cf_in)
+
+	if bright is not None or cont is not None :
+		bright = 0.0 if bright is None else bright
+		cont = 1.0 if cont is None else cont
+		luma_lut = []
+		luma_min = 0
+		luma_max = (2 ** fmt_bit_in) - 1
+		if coring :
+			luma_min = 16 << (fmt_bit_in - 8)
+			luma_max = 235 << (fmt_bit_in - 8)
+		for i in range(2 ** fmt_bit_in) :
+			val = int((i - luma_min) * cont + bright + luma_min + 0.5)
+			luma_lut.append(min(max(val, luma_min), luma_max))
+
+		output = input.std.Lut(planes=0, lut=luma_lut)
+
+	return output
+
+##################################################
+## 提取高频层 # helper
+##################################################
+
+def LAYER_HIGH(
+	input : vs.VideoNode,
+	blur_m : typing.Literal[0, 1, 2] = 2,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	core.num_threads = vs_t
+	fmt_in = input.format.id
+
+	if fmt_in == vs.YUV444P16 :
+		cut0 = input
+	else :
+		cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P16)
+	if blur_m == 0 :
+		output_blur = cut0
+		output_diff = None
+	elif blur_m == 1 :
+		blur = core.rgvs.RemoveGrain(clip=cut0, mode=20)
+		blur = core.rgvs.RemoveGrain(clip=blur, mode=20)
+		output_blur = core.rgvs.RemoveGrain(clip=blur, mode=20)
+	elif blur_m == 2 :
+		blur = core.std.Convolution(clip=cut0, matrix=[1, 1, 1, 1, 1, 1, 1, 1, 1])
+		blur = core.std.Convolution(clip=blur, matrix=[1, 1, 1, 1, 1, 1, 1, 1, 1])
+		output_blur = core.std.Convolution(clip=blur, matrix=[1, 1, 1, 1, 1, 1, 1, 1, 1])
+
+	if blur_m :
+		output_diff = core.std.MakeDiff(clipa=cut0, clipb=blur)
+
+	return output_blur, output_diff
+
+##################################################
+## 提取线条 # helper
+##################################################
+
+def LINE_MASK(
+	input : vs.VideoNode,
+	cpu : bool = True,
+	gpu : typing.Literal[-1, 0, 1, 2] = -1,
+	plane : typing.List[int] = [0],
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	core.num_threads = vs_t
+
+	if cpu : # r13+
+		output = core.tcanny.TCanny(clip=input, sigma=1.5, t_h=8.0, t_l=1.0, mode=0, op=1, planes=plane)
+	else : # r12
+		output = core.tcanny.TCannyCL(clip=input, sigma=1.5, t_h=8.0, t_l=1.0, mode=0, op=1, device=gpu, planes=plane)
+
+	return output
+
+##################################################
+## 分离平面 # helper
+##################################################
+
+def PLANE_EXTR(
+	input : vs.VideoNode,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	core.num_threads = vs_t
+
+	''' obs
+	output = []
+	for plane in range(input.format.num_planes) :
+		clips = core.std.ShufflePlanes(clips=input, planes=plane, colorfamily=vs.GRAY)
+		output.append(clips)
+	'''
+
+	output = core.std.SplitPlanes(clip=input)
+
+	return output
+
+##################################################
+## 动态范围修正 # helper
+##################################################
+
+def RANGE_CHANGE(
+	input : vs.VideoNode,
+	l2f : bool = True,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	core.num_threads = vs_t
+	fmt_in = input.format.id
+	
+	cut0 = input
+	if fmt_in in [vs.YUV420P8, vs.YUV422P8, vs.YUV410P8, vs.YUV411P8, vs.YUV440P8, vs.YUV444P8] :
+		lv_val_pre = 0
+	elif fmt_in in [vs.YUV420P10, vs.YUV422P10, vs.YUV444P10] :
+		lv_val_pre = 1
+	elif fmt_in in [vs.YUV420P16, vs.YUV422P16, vs.YUV444P16] :
+		lv_val_pre = 2
+	else :
+		cut0 = core.resize.Bilinear(format=vs.YUV444P16)
+		lv_val_pre = 2
+	
+	lv_val1 = [16, 64, 4096][lv_val_pre]
+	lv_val2 = [235, 940, 60160][lv_val_pre]
+	lv_val2_alt = [240, 960, 61440][lv_val_pre]
+	lv_val3 = 0
+	lv_val4 = [255, 1023, 65535][lv_val_pre]
+	if l2f :
+		cut1 = core.std.Levels(clip=cut0, min_in=lv_val1, max_in=lv_val2, min_out=lv_val3, max_out=lv_val4, planes=0)
+		output = core.std.Levels(clip=cut1, min_in=lv_val1, max_in=lv_val2_alt, min_out=lv_val3, max_out=lv_val4, planes=[1,2])
+	else :
+		cut1 = core.std.Levels(clip=cut0, min_in=lv_val3, max_in=lv_val4, min_out=lv_val1, max_out=lv_val2, planes=0)
+		output = core.std.Levels(clip=cut1, min_in=lv_val3, max_in=lv_val4, min_out=lv_val1, max_out=lv_val2_alt, planes=[1,2])
+
+	return output
+
+##################################################
 ## MOD HAvsFunc (e1fcce2b4645ed4acde9192606d00bcac1b5c9e5)
 ## 变更源帧率
 ##################################################
@@ -229,17 +403,17 @@ def FPS_CHANGE(
 
 	core.num_threads = vs_t
 
-	def ChangeFPS(clip: vs.VideoNode, fpsnum: int, fpsden: int = 1) -> vs.VideoNode:
+	def _ChangeFPS(clip: vs.VideoNode, fpsnum: int, fpsden: int = 1) -> vs.VideoNode :
 		factor = (fpsnum / fpsden) * (clip.fps_den / clip.fps_num)
-		def frame_adjuster(n: int) -> vs.VideoNode:
+		def _frame_adjuster(n: int) -> vs.VideoNode :
 			real_n = math.floor(n / factor)
 			one_frame_clip = clip[real_n] * (len(clip) + 100)
 			return one_frame_clip
 		attribute_clip = clip.std.BlankClip(length=math.floor(len(clip) * factor), fpsnum=fpsnum, fpsden=fpsden)
-		return attribute_clip.std.FrameEval(eval=frame_adjuster)
+		return attribute_clip.std.FrameEval(eval=_frame_adjuster)
 
 	src = core.std.AssumeFPS(clip=input, fpsnum=fps_in * 1000, fpsden=1000)
-	fin = ChangeFPS(clip=src, fpsnum=fps_out * 1000, fpsden=1000)
+	fin = _ChangeFPS(clip=src, fpsnum=fps_out * 1000, fpsden=1000)
 	output = core.std.AssumeFPS(clip=fin, fpsnum=fps_out * 1000, fpsden=1000)
 
 	return output
@@ -312,7 +486,10 @@ def ACNET_STD(
 	core.num_threads = vs_t
 	fmt_in = input.format.id
 
-	cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P16)
+	if fmt_in == vs.YUV444P16 :
+		cut0 = input
+	else :
+		cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P16)
 	cut1 = core.anime4kcpp.Anime4KCPP(src=cut0, zoomFactor=2, ACNet=1, GPUMode=1, GPGPUModel="opencl" if gpu_m==1 else "cuda", HDN=nr, HDNLevel=nr_lv, platformID=gpu, deviceID=gpu)
 	output = core.resize.Bilinear(clip=cut1, format=fmt_in)
 
@@ -327,7 +504,7 @@ def CUGAN_NV(
 	lt_hd : bool = False,
 	nr_lv : typing.Literal[-1, 0, 3] = -1,
 	gpu : typing.Literal[0, 1, 2] = 0,
-	gpu_t : typing.Literal[1, 2, 3] = 2,
+	gpu_t : int = 2,
 	st_eng : bool = False,
 	ws_size : int = 0,
 	vs_t : int = vs_thd_dft,
@@ -342,7 +519,7 @@ def CUGAN_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if gpu_t not in [1, 2, 3] :
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(st_eng, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 st_eng 的值无效")
@@ -382,13 +559,63 @@ def CUGAN_NV(
 ## Real-ESRGAN放大
 ##################################################
 
+def ESRGAN_DML(
+	input : vs.VideoNode,
+	lt_hd : bool = False,
+	model : typing.Literal[0, 2, 5000, 5001, 5002, 5003, 5004] = 5000,
+	scale : typing.Literal[1, 2, 3, 4] = 2,
+	gpu : typing.Literal[0, 1, 2] = 0,
+	gpu_t : int = 2,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "ESRGAN_DML"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(lt_hd, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
+	if model not in [0, 2, 5000, 5001, 5002, 5003, 5004] :
+		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
+	if scale not in [1, 2, 3, 4] :
+		raise vs.Error(f"模块 {func_name} 的子参数 scale 的值无效")
+	if gpu not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	global vsmlrt
+	if vsmlrt is None :
+		import vsmlrt
+
+	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+	size_in = w_in * h_in
+	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+	fmt_in = input.format.id
+
+	if (not lt_hd and (size_in > 1280 * 720)) or (size_in > 2048 * 1080) :
+		raise Exception("源分辨率超过限制的范围，已临时中止。")
+
+	cut1 = input.resize.Bilinear(format=vs.RGBS, matrix_in_s="709")
+	cut2 = vsmlrt.RealESRGANv2(clip=cut1, scale=scale, model=model, backend=vsmlrt.BackendV2.ORT_DML(
+		device_id=gpu, num_streams=gpu_t, fp16=True))
+	output = core.resize.Bilinear(clip=cut2, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+
+	return output
+
+##################################################
+## Real-ESRGAN放大
+##################################################
+
 def ESRGAN_NV(
 	input : vs.VideoNode,
 	lt_hd : bool = False,
 	model : typing.Literal[0, 2, 5000, 5001, 5002, 5003, 5004] = 5000,
 	scale : typing.Literal[1, 2, 3, 4] = 2,
 	gpu : typing.Literal[0, 1, 2] = 0,
-	gpu_t : typing.Literal[1, 2, 3] = 2,
+	gpu_t : int = 2,
 	st_eng : bool = False,
 	ws_size : int = 0,
 	vs_t : int = vs_thd_dft,
@@ -405,7 +632,7 @@ def ESRGAN_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 scale 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if gpu_t not in [1, 2, 3] :
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(st_eng, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 st_eng 的值无效")
@@ -501,13 +728,67 @@ def NNEDI3_STD(
 ## Waifu2x放大
 ##################################################
 
-def WAIFU_NV(
+def WAIFU_DML(
 	input : vs.VideoNode,
 	lt_hd : bool = False,
+	model : typing.Literal[3, 5, 6] = 3,
 	nr_lv : typing.Literal[-1, 0, 1, 2, 3] = 1,
 	scale : typing.Literal[1, 2, 3, 4] = 2,
 	gpu : typing.Literal[0, 1, 2] = 0,
-	gpu_t : typing.Literal[1, 2, 3] = 2,
+	gpu_t : int = 2,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "WAIFU_DML"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(lt_hd, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
+	if model not in [3, 5, 6] :
+		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
+	if nr_lv not in [-1, 0, 1, 2, 3] :
+		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
+	if scale not in [1, 2, 3, 4] :
+		raise vs.Error(f"模块 {func_name} 的子参数 scale 的值无效")
+	if gpu not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	global vsmlrt
+	if vsmlrt is None :
+		import vsmlrt
+
+	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+	size_in = w_in * h_in
+	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+	fmt_in = input.format.id
+
+	if (not lt_hd and (size_in > 1280 * 720)) or (size_in > 2048 * 1080) :
+		raise Exception("源分辨率超过限制的范围，已临时中止。")
+
+	cut1 = input.resize.Bilinear(format=vs.RGBS, matrix_in_s="709")
+	cut2 = vsmlrt.Waifu2x(clip=cut1, noise=nr_lv, scale=scale, model=model, backend=vsmlrt.BackendV2.ORT_DML(
+		device_id=gpu, num_streams=gpu_t, fp16=True))
+	output = core.resize.Bilinear(clip=cut2, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+
+	return output
+
+##################################################
+## Waifu2x放大
+##################################################
+
+def WAIFU_NV(
+	input : vs.VideoNode,
+	lt_hd : bool = False,
+	model : typing.Literal[3, 5, 6] = 3,
+	nr_lv : typing.Literal[-1, 0, 1, 2, 3] = 1,
+	scale : typing.Literal[1, 2, 3, 4] = 2,
+	gpu : typing.Literal[0, 1, 2] = 0,
+	gpu_t : int = 2,
 	st_eng : bool = False,
 	ws_size : int = 0,
 	vs_t : int = vs_thd_dft,
@@ -518,13 +799,15 @@ def WAIFU_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(lt_hd, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
+	if model not in [3, 5, 6] :
+		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if nr_lv not in [-1, 0, 1, 2, 3] :
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
 	if scale not in [1, 2, 3, 4] :
 		raise vs.Error(f"模块 {func_name} 的子参数 scale 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if gpu_t not in [1, 2, 3] :
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(st_eng, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 st_eng 的值无效")
@@ -549,7 +832,7 @@ def WAIFU_NV(
 		raise Exception("源分辨率不属于动态引擎支持的范围，已临时中止。")
 
 	cut1 = input.resize.Bilinear(format=vs.RGBH, matrix_in_s="709")
-	cut2 = vsmlrt.Waifu2x(clip=cut1, noise=nr_lv, scale=scale, model=3, backend=vsmlrt.BackendV2.TRT(
+	cut2 = vsmlrt.Waifu2x(clip=cut1, noise=nr_lv, scale=scale, model=model, backend=vsmlrt.BackendV2.TRT(
 		num_streams=gpu_t, force_fp16=True, output_format=1,
 		workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
 		use_cuda_graph=True, use_cublas=False, use_cudnn=False,
@@ -637,7 +920,7 @@ def MVT_STD(
 
 	core.num_threads = vs_t
 
-	def ffps(fps) :
+	def _ffps(fps) :
 		rfps = int('%.0f' % fps)
 		if ( abs(fps - (rfps/1.001)) < abs(fps - (rfps/1.000)) ) :
 			vfps, vden = rfps*1000, 1001
@@ -645,7 +928,7 @@ def MVT_STD(
 			vfps, vden = rfps*1000, 1000
 		return vfps, vden
 
-	vfps, vden = ffps(fps_in)
+	vfps, vden = _ffps(fps_in)
 	cut1 = core.std.AssumeFPS(input, fpsnum=int(vfps), fpsden=vden)
 	cut_s = core.mv.Super(clip=cut1, sharp=1, rfilter=4)
 
@@ -776,7 +1059,7 @@ def RIFE_STD(
 	fps_num : int = 2,
 	fps_den : int = 1,
 	gpu : typing.Literal[0, 1, 2] = 0,
-	gpu_t : typing.Literal[1, 2, 3] = 2,
+	gpu_t : int = 2,
 	vs_t : int = vs_thd_dft,
 ) -> vs.VideoNode :
 
@@ -795,7 +1078,7 @@ def RIFE_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if gpu_t not in [1, 2, 3] :
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
@@ -831,7 +1114,7 @@ def RIFE_NV(
 	t_tta : bool = False,
 	ext_proc : bool = True,
 	gpu : typing.Literal[0, 1, 2] = 0,
-	gpu_t : typing.Literal[1, 2, 3] = 2,
+	gpu_t : int = 2,
 	st_eng : bool = False,
 	ws_size : int = 0,
 	vs_t : int = vs_thd_dft,
@@ -852,7 +1135,7 @@ def RIFE_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 ext_proc 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if gpu_t not in [1, 2, 3] :
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(st_eng, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 st_eng 的值无效")
@@ -931,7 +1214,7 @@ def RIFE_NV_ORT(
 	cudnn : bool = False,
 	ext_proc : bool = False,
 	gpu : typing.Literal[0, 1, 2] = 0,
-	gpu_t : typing.Literal[1, 2, 3] = 2,
+	gpu_t : int = 2,
 	vs_t : int = vs_thd_dft,
 ) -> vs.VideoNode :
 
@@ -1061,7 +1344,7 @@ def SVP_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
 	core.num_threads = vs_t
-	fps_in = fps_in
+	fmt_in = input.format.id
 	fps_out = fps_out * 1e6
 	acc = 1 if cpu == 0 else 0
 
@@ -1069,7 +1352,10 @@ def SVP_STD(
 	super_params = "{pel:2,gpu:%d,scale:{up:2,down:4}}" % (acc)
 	analyse_params = "{block:{w:32,h:32,overlap:2},main:{levels:4,search:{type:4,distance:-8,coarse:{type:4,distance:-5,bad:{range:0}}},penalty:{plevel:1.3,pzero:110,pnbour:75}},refine:[{thsad:200,search:{type:4,distance:2}}]}"
 
-	clip_f = core.resize.Bilinear(clip=input, format=vs.YUV420P8)
+	if fmt_in == vs.YUV420P8 :
+		clip_f = input
+	else :
+		clip_f = core.resize.Bilinear(clip=input, format=vs.YUV420P8)
 	super = core.svp1.Super(clip_f, super_params)
 	vectors = core.svp1.Analyse(super["clip"], super["data"], input if acc else clip_f, analyse_params)
 	smooth = core.svp2.SmoothFps(input if acc else clip_f, super["clip"], super["data"], vectors["clip"], vectors["data"], smoothfps_params, src=input if acc else clip_f, fps=fps_in)
@@ -1180,7 +1466,7 @@ def SVP_HQ(
 	overlap = 2 if cpu == 0 else 3
 	w, h = input.width, input.height
 
-	if (freq - fps < 2):
+	if (freq - fps < 2) :
 		raise Exception("Interpolation is not necessary.")
 
 	target_fps = 60
@@ -1189,18 +1475,18 @@ def SVP_HQ(
 	ap = "{block:{w:32,h:16,overlap:%d},main:{levels:5,search:{type:4,distance:-12,coarse:{type:4,distance:-1,trymany:true,bad:{range:0}}},penalty:{lambda:3.33,plevel:1.33,lsad:3300,pzero:110,pnbour:50}},refine:[{thsad:400},{thsad:200,search:{type:4,distance:-4}}]}" % (overlap)
 	fp = "{gpuid:%d,algo:23,rate:{num:%d,den:%d,abs:true},mask:{cover:80,area:30,area_sharp:0.75},scene:{mode:0,limits:{scene:6000,zero:100,blocks:40}}}" % (gpu, round(min(max(target_fps, fps * 2, freq / 2), freq)) * 1000, 1001)
 
-	def toYUV420(clip) :
-		if clip.format.id == vs.YUV420P8:
+	def _toYUV420(clip) :
+		if clip.format.id == vs.YUV420P8 :
 			clip8 = clip
-		elif clip.format.id == vs.YUV420P10:
+		elif clip.format.id == vs.YUV420P10 :
 			clip8 = clip.resize.Bilinear(format=vs.YUV420P8)
-		else:
+		else :
 			clip = clip.resize.Bilinear(format=vs.YUV420P10)
 			clip8 = clip.resize.Bilinear(format=vs.YUV420P8)
 		return clip, clip8
 
-	def svpflow(clip, fps, sp, ap, fp) :
-		clip, clip8 = toYUV420(clip)
+	def _svpflow(clip, fps, sp, ap, fp) :
+		clip, clip8 = _toYUV420(clip)
 		s = core.svp1.Super(clip8, sp)
 		r = s["clip"], s["data"]
 		v = core.svp1.Analyse(*r, clip, ap)
@@ -1208,7 +1494,46 @@ def SVP_HQ(
 		clip = core.svp2.SmoothFps(clip if acc else clip8, *r, fp, src=clip, fps=fps)
 		return clip
 
-	output = svpflow(input, fps, sp, ap, fp)
+	output = _svpflow(input, fps, sp, ap, fp)
+
+	return output
+
+##################################################
+## Bilateral降噪
+##################################################
+
+def BILA_NV(
+	input : vs.VideoNode,
+	nr_spat : typing.List[float] = [3.0, 0.0, 0.0],
+	nr_csp : typing.List[float] = [0.02, 0.0, 0.0],
+	gpu : typing.Literal[0, 1, 2] = 0,
+	gpu_t : int = 4,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "BILA_NV"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not (isinstance(nr_spat, list) and len(nr_spat) == 3) :
+		raise vs.Error(f"模块 {func_name} 的子参数 nr_spat 的值无效")
+	if not (isinstance(nr_csp, list) and len(nr_csp) == 3) :
+		raise vs.Error(f"模块 {func_name} 的子参数 nr_csp 的值无效")
+	if gpu not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+	fmt_in = input.format.id
+
+	if fmt_in == vs.YUV444P16 :
+		cut0 = input
+	else :
+		cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P16)
+	cut1 = core.bilateralgpu_rtc.Bilateral(clip=cut0, sigma_spatial=nr_spat, sigma_color=nr_csp, device_id=gpu, num_streams=gpu_t, use_shared_memory=True)
+	output = core.resize.Bilinear(clip=cut1, format=fmt_in)
 
 	return output
 
@@ -1272,9 +1597,7 @@ def CCD_STD(
 	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
 	fmt_in = input.format.id
 
-	def ccd(src: vs.VideoNode, threshold: float = 4) -> vs.VideoNode:
-		if src.format.color_family != vs.RGB or src.format.sample_type != vs.FLOAT:
-			raise ValueError('ccd: only RGBS format is supported')
+	def _ccd(src: vs.VideoNode, threshold: float = 4) -> vs.VideoNode :
 		thr = threshold**2/195075.0
 		r = core.std.ShufflePlanes([src, src, src], [0, 0, 0], vs.RGB)
 		g = core.std.ShufflePlanes([src, src, src], [1, 1, 1], vs.RGB)
@@ -1313,8 +1636,106 @@ def CCD_STD(
 		return ex_ccd
 
 	cut = core.resize.Bilinear(clip=input, format=vs.RGBS, matrix_in_s="709")
-	fin = ccd(src=cut, threshold=nr_lv)
+	fin = _ccd(src=cut, threshold=nr_lv)
 	output = core.resize.Bilinear(clip=fin, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+
+	return output
+
+##################################################
+## DFTTest降噪
+##################################################
+
+def DFTT_STD(
+	input : vs.VideoNode,
+	plane : typing.List[int] = [0],
+	nr_lv : float = 8.0,
+	size_sb : int = 16,
+	size_so : int = 12,
+	size_tb : int = 3,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "DFTT_STD"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if plane not in ([0], [1], [2], [0, 1], [0, 2], [1, 2], [0, 1, 2]) :
+		raise vs.Error(f"模块 {func_name} 的子参数 plane 的值无效")
+	if nr_lv <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
+	if not isinstance(size_sb, int) or size_sb <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 size_sb 的值无效")
+	if not isinstance(size_so, int) or size_so <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 size_so 的值无效")
+	if not isinstance(size_tb, int) or size_tb <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 size_tb 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+	fmt_in = input.format.id
+
+	global dfttest2
+	if dfttest2 is None :
+		import dfttest2
+
+	if fmt_in == vs.YUV444P16 :
+		cut0 = input
+	else :
+		cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P16)
+	cut1 = dfttest2.DFTTest2(clip=cut0, planes=plane, sigma=nr_lv, sbsize=size_sb, sosize=size_so, tbsize=size_tb, backend=dfttest2.Backend.CPU())
+	output = core.resize.Bilinear(clip=cut1, format=fmt_in)
+
+	return output
+
+##################################################
+## DFTTest降噪
+##################################################
+
+def DFTT_NV(
+	input : vs.VideoNode,
+	plane : typing.List[int] = [0],
+	nr_lv : float = 8.0,
+	size_sb : int = 16,
+	size_so : int = 12,
+	size_tb : int = 3,
+	gpu : typing.Literal[0, 1, 2] = 0,
+	gpu_t : int = 4,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "DFTT_NV"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if plane not in ([0], [1], [2], [0, 1], [0, 2], [1, 2], [0, 1, 2]) :
+		raise vs.Error(f"模块 {func_name} 的子参数 plane 的值无效")
+	if nr_lv <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
+	if not isinstance(size_sb, int) or size_sb <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 size_sb 的值无效")
+	if not isinstance(size_so, int) or size_so <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 size_so 的值无效")
+	if not isinstance(size_tb, int) or size_tb <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 size_tb 的值无效")
+	if gpu not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+	fmt_in = input.format.id
+
+	global dfttest2
+	if dfttest2 is None :
+		import dfttest2
+
+	if fmt_in == vs.YUV444P16 :
+		cut0 = input
+	else :
+		cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P16)
+	cut1 = dfttest2.DFTTest2(clip=cut0, planes=plane, sigma=nr_lv, sbsize=size_sb, sosize=size_so, tbsize=size_tb, backend=dfttest2.Backend.NVRTC(device_id=gpu, num_streams=gpu_t))
+	output = core.resize.Bilinear(clip=cut1, format=fmt_in)
 
 	return output
 
@@ -1395,21 +1816,9 @@ def NLM_STD(
 
 	core.num_threads = vs_t
 	fmt_in = input.format.id
-
-	cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P16)
-	if blur_m == 0 :
-		blur = cut0
-	elif blur_m == 1 :
-		blur = core.rgvs.RemoveGrain(clip=cut0, mode=20)
-		blur = core.rgvs.RemoveGrain(clip=blur, mode=20)
-		blur = core.rgvs.RemoveGrain(clip=blur, mode=20)
-	elif blur_m == 2 :
-		blur = core.std.Convolution(clip=cut0, matrix=[1, 1, 1, 1, 1, 1, 1, 1, 1])
-		blur = core.std.Convolution(clip=blur, matrix=[1, 1, 1, 1, 1, 1, 1, 1, 1])
-		blur = core.std.Convolution(clip=blur, matrix=[1, 1, 1, 1, 1, 1, 1, 1, 1])
+	blur, diff = LAYER_HIGH(input=input, blur_m=blur_m, vs_t=vs_t)
 
 	if blur_m :
-		diff = core.std.MakeDiff(clipa=cut0, clipb=blur)
 		if nlm_m == 1 :
 			cut1 = core.knlm.KNLMeansCL(clip=diff, d=frame_num, a=rad_sw, s=rad_snw, h=nr_lv,
 				channels="auto", wmode=2, wref=1.0, rclip=None, device_type="GPU", device_id=gpu)
@@ -1440,7 +1849,7 @@ def NLM_NV(
 	rad_snw : int = 2,
 	nr_lv : float = 3.0,
 	gpu : typing.Literal[0, 1, 2] = 0,
-	gpu_t : typing.Literal[1, 2, 3] = 2,
+	gpu_t : int = 4,
 	vs_t : int = vs_thd_dft,
 ) -> vs.VideoNode :
 
@@ -1459,28 +1868,16 @@ def NLM_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if gpu_t not in [1, 2, 3] :
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
 	core.num_threads = vs_t
 	fmt_in = input.format.id
-
-	cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P16)
-	if blur_m == 0 :
-		blur = cut0
-	elif blur_m == 1 :
-		blur = core.rgvs.RemoveGrain(clip=cut0, mode=20)
-		blur = core.rgvs.RemoveGrain(clip=blur, mode=20)
-		blur = core.rgvs.RemoveGrain(clip=blur, mode=20)
-	elif blur_m == 2 :
-		blur = core.std.Convolution(clip=cut0, matrix=[1, 1, 1, 1, 1, 1, 1, 1, 1])
-		blur = core.std.Convolution(clip=blur, matrix=[1, 1, 1, 1, 1, 1, 1, 1, 1])
-		blur = core.std.Convolution(clip=blur, matrix=[1, 1, 1, 1, 1, 1, 1, 1, 1])
+	blur, diff = LAYER_HIGH(input=input, blur_m=blur_m, vs_t=vs_t)
 
 	if blur_m :
-		diff = core.std.MakeDiff(clipa=cut0, clipb=blur)
 		cut1 = core.nlm_cuda.NLMeans(clip=diff, d=frame_num, a=rad_sw, s=rad_snw, h=nr_lv,
 			channels="AUTO", wmode=2, wref=1.0, rclip=None, device_id=gpu, num_streams=gpu_t)
 		merge = core.std.MergeDiff(clipa=blur, clipb=cut1)
@@ -1499,7 +1896,7 @@ def AA_NV(
 	input : vs.VideoNode,
 #	plane : typing.List[int] = [0],
 	gpu : typing.Literal[-1, 0, 1, 2] = -1,
-	gpu_t : typing.Literal[1, 2, 3] = 2,
+	gpu_t : int = 4,
 	vs_t : int = vs_thd_dft,
 ) -> vs.VideoNode :
 
@@ -1510,7 +1907,7 @@ def AA_NV(
 #		raise vs.Error(f"模块 {func_name} 的子参数 plane 的值无效")
 	if gpu not in [-1, 0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if gpu_t not in [1, 2, 3] :
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
@@ -1555,6 +1952,90 @@ def COLOR_P3W_FIX(
 	return output
 
 ##################################################
+## MOD HAvsFunc (e236281cd8c1dd6b1b0cc906844944b79b1b52fa)
+## 修正红蓝色度偏移
+##################################################
+
+def CSC_RB(
+	input : vs.VideoNode,
+	cx : int = 4,
+	cy : int = 4,
+	sat_lv1 : float = 4.0,
+	sat_lv2 : float = 0.8,
+	blur : bool = False,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "CSC_RB"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(cx, int) :
+		raise vs.Error(f"模块 {func_name} 的子参数 cx 的值无效")
+	if not isinstance(cy, int) :
+		raise vs.Error(f"模块 {func_name} 的子参数 cy 的值无效")
+	if not isinstance(thr, (int, float)) :
+		raise vs.Error(f"模块 {func_name} 的子参数 thr 的值无效")
+	if not isinstance(sat_lv, (int, float)) :
+		raise vs.Error(f"模块 {func_name} 的子参数 sat_lv 的值无效")
+	if not isinstance(blur, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 blur 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+	neutral = 1 << (input.format.bits_per_sample - 1)
+	peak = (1 << input.format.bits_per_sample) - 1
+	def _cround(x) :
+		return math.floor(x + 0.5) if x > 0 else math.ceil(x - 0.5)
+	def _scale(value, peak) :
+		return _cround(value * peak / 255) if peak != 1 else value / 255
+	def _Levels(clip, input_low, gamma, input_high, output_low, output_high, coring=True) :
+		gamma = 1 / gamma
+		divisor = input_high - input_low + (input_high == input_low)
+		tvLow, tvHigh = _scale(16, peak), [_scale(235, peak), _scale(240, peak)]
+		scaleUp, scaleDown = peak / _scale(219, peak), _scale(219, peak) / peak
+		def _get_lut1(x) :
+			p = ((x - tvLow) * scaleUp - input_low) / divisor if coring else (x - input_low) / divisor
+			p = min(max(p, 0), 1) ** gamma * (output_high - output_low) + output_low
+			return min(max(_cround(p * scaleDown + tvLow), tvLow), tvHigh[0]) if coring else min(max(_cround(p), 0), peak)
+		def _get_lut2(x) :
+			q = _cround((x - neutral) * (output_high - output_low) / divisor + neutral)
+			return min(max(q, tvLow), tvHigh[1]) if coring else min(max(q, 0), peak)
+		last = clip.std.Lut(planes=[0], function=_get_lut1)
+		if clip.format.color_family != vs.GRAY :
+			last = last.std.Lut(planes=[1, 2], function=_get_lut2)
+		return last
+	def _GetPlane(clip, plane=0) :
+		sFormat = clip.format
+		sNumPlanes = sFormat.num_planes
+		last = core.std.ShufflePlanes(clips=clip, planes=plane, colorfamily=vs.GRAY)
+		return last
+
+	fmt_cf_in = input.format.color_family
+	vch = _GetPlane(EQ(input, sat=sat_lv1, vs_t=vs_t), 2)
+	area = vch
+	if blur :
+		area = vch.std.Convolution(matrix=[1, 2, 1, 2, 4, 2, 1, 2, 1])
+
+	red = _Levels(area, _scale(255, peak), 1.0, _scale(255, peak), _scale(255, peak), 0)
+	blue = _Levels(area, 0, 1.0, 0, 0, _scale(255, peak))
+	mask = core.std.Merge(clipa=red, clipb=blue)
+
+	if not blur :
+		mask = mask.std.Convolution(matrix=[1, 2, 1, 2, 4, 2, 1, 2, 1])
+	mask = _Levels(mask, _scale(250, peak), 1.0, _scale(250, peak), _scale(255, peak), 0)
+	mask = mask.std.Convolution(matrix=[0, 0, 0, 1, 0, 0, 0, 0, 0], divisor=1, saturate=False).std.Convolution(
+		matrix=[1, 1, 1, 1, 1, 1, 0, 0, 0], divisor=8, saturate=False)
+	mask = _Levels(mask, _scale(10, peak), 1.0, _scale(10, peak), 0, _scale(255, peak)).std.Inflate()
+	input_c = EQ(input.resize.Spline16(src_left=cx, src_top=cy), sat=sat_lv2, vs_t=vs_t)
+	fu = core.std.MaskedMerge(clipa=_GetPlane(input, 1), clipb=_GetPlane(input_c, 1), mask=mask)
+	fv = core.std.MaskedMerge(clipa=_GetPlane(input, 2), clipb=_GetPlane(input_c, 2), mask=mask)
+
+	output = core.std.ShufflePlanes([input, fu, fv], planes=[0, 0, 0], colorfamily=fmt_cf_in)
+
+	return output
+
+##################################################
 ## f3kdb去色带
 ##################################################
 
@@ -1594,9 +2075,13 @@ def DEBAND_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
 	core.num_threads = vs_t
+	fmt_in = fmt_in = input.format.id
 	color_lv = getattr(input.get_frame(0).props, "_ColorRange", 0)
 
-	cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P16)
+	if fmt_in == vs.YUV444P16 :
+		cut0 = input
+	else :
+		cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P16)
 	output = core.neo_f3kdb.Deband(clip=cut0, range=bd_range, y=bdy_rth, cb=bdc_rth, cr=bdc_rth, grainy=grainy, grainc=grainc, sample_mode=spl_m, dynamic_grain=grain_dy, mt=True, keep_tv_range=True if color_lv==1 else False, output_depth=depth)
 
 	return output
@@ -1808,34 +2293,78 @@ def STAB_HQ(
 
 	core.num_threads = vs_t
 
-	def scdetect(clip: vs.VideoNode, threshold: float = 0.1) -> vs.VideoNode:
-		def _copy_property(n: int, f: list[vs.VideoFrame]) -> vs.VideoFrame:
+	def _scdetect(clip: vs.VideoNode, threshold: float = 0.1) -> vs.VideoNode :
+		def _copy_property(n: int, f: list[vs.VideoFrame]) -> vs.VideoFrame :
 			fout = f[0].copy()
 			fout.props["_SceneChangePrev"] = f[1].props["_SceneChangePrev"]
 			fout.props["_SceneChangeNext"] = f[1].props["_SceneChangeNext"]
 			return fout
 		sc = clip
-		if clip.format.color_family == vs.RGB:
+		if clip.format.color_family == vs.RGB :
 			sc = clip.resize.Point(format=vs.GRAY8, matrix_s="709")
 		sc = sc.misc.SCDetect(threshold=threshold)
-		if clip.format.color_family == vs.RGB:
+		if clip.format.color_family == vs.RGB :
 			sc = clip.std.ModifyFrame(clips=[clip, sc], selector=_copy_property)
 		return sc
 
 	## PORT HAvsFunc (17b62a0b2695e0950e0899dba466ab42327c32c9)
-	def average_frames(clip: vs.VideoNode, weights: typing.Union[float, typing.Sequence[float]], scenechange: typing.Optional[float] = None, planes: typing.Optional[typing.Union[int, typing.Sequence[int]]] = None) -> vs.VideoNode:
-		if scenechange:
-			clip = scdetect(clip, scenechange)
+	def _average_frames(clip: vs.VideoNode, weights: typing.Union[float, typing.Sequence[float]], scenechange: typing.Optional[float] = None, planes: typing.Optional[typing.Union[int, typing.Sequence[int]]] = None) -> vs.VideoNode :
+		if scenechange :
+			clip = _scdetect(clip, scenechange)
 		return clip.std.AverageFrames(weights=weights, scenechange=scenechange, planes=planes)
 
-	def Stab(clp, dxmax=4, dymax=4, mirror=0):
-		temp = average_frames(clp, weights=[1] * 15, scenechange=25 / 255)
-		inter = core.std.Interleave([core.rgvs.Repair(temp, average_frames(clp, weights=[1] * 3, scenechange=25 / 255), mode=[1]), clp])
+	def _Stab(clp, dxmax=4, dymax=4, mirror=0) :
+		temp = _average_frames(clp, weights=[1] * 15, scenechange=25 / 255)
+		inter = core.std.Interleave([core.rgvs.Repair(temp, _average_frames(clp, weights=[1] * 3, scenechange=25 / 255), mode=[1]), clp])
 		mdata = inter.mv.DepanEstimate(trust=0, dxmax=dxmax, dymax=dymax)
 		last = inter.mv.DepanCompensate(data=mdata, offset=-1, mirror=mirror)
 		return last[::2]
 
-	output = Stab(clp=input, mirror=15)
+	output = _Stab(clp=input, mirror=15)
+
+	return output
+
+##################################################
+## 自定义ONNX模型（仅支持放大类）
+##################################################
+
+def UAI_DML(
+	input : vs.VideoNode,
+	clamp : bool = False,
+	model_pth : str = "",
+	gpu : typing.Literal[0, 1, 2] = 0,
+	gpu_t : int = 2,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "UAI_DML"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(clamp, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 clamp 的值无效")
+	if len(model_pth) == 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 model_pth 的值无效")
+	if gpu not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	global vsmlrt
+	if vsmlrt is None :
+		import vsmlrt
+
+	core.num_threads = vs_t
+	fmt_in = input.format.id
+	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+
+	clip = core.resize.Bilinear(clip=input, format=vs.RGBS, matrix_in_s="709")
+	if clamp :
+		clip = core.akarin.Expr(clips=clip, expr="x 0 1 clamp")
+	be_param = vsmlrt.BackendV2.ORT_DML(device_id=gpu, num_streams=gpu_t, fp16=True)
+	infer = vsmlrt.inference(clips=clip, network_path=os.path.join(vsmlrt.models_path, model_pth), backend=be_param)
+	output = core.resize.Bilinear(clip=infer, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
 
 	return output
 
@@ -1852,7 +2381,7 @@ def UAI_NV_TRT(
 	fp16 : bool = False,
 	tf32 : bool = True,
 	gpu : typing.Literal[0, 1, 2] = 0,
-	gpu_t : typing.Literal[1, 2, 3] = 2,
+	gpu_t : int = 2,
 	st_eng : bool = False,
 	res_opt : typing.List[int] = None,
 	res_max : typing.List[int] = None,
@@ -1877,7 +2406,7 @@ def UAI_NV_TRT(
 		raise vs.Error(f"模块 {func_name} 的子参数 tf32 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if gpu_t not in [1, 2, 3] :
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(st_eng, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 st_eng 的值无效")

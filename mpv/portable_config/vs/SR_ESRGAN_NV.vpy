@@ -14,7 +14,6 @@ clip = video_in
 H_Pre = 720
 Lt_Hd = False
 Model = 5000
-Scale = 2
 Gpu = 0
 Gpu_T = 2
 St_Eng = False
@@ -24,7 +23,6 @@ Lk_Fmt = False
 ## 整数，预降低处理源高度
 ## <True|False> 是否对超过HD分辨率（720P）的源进行处理
 ## <0|2|5000|5001|5002|5003|5004> 使用的模型
-## <2|4> 放大倍率，模型二号应使用4，其它使用2
 ## 使用的显卡序号，0为排序一号
 ## <1|2|3> 使用的显卡线程数
 ## <True|False> 是否使用静态引擎（需要对不同分辨率的源各进行预处理）；动态引擎自适应不同分辨率（64²→DCI2K）
@@ -34,7 +32,7 @@ Lk_Fmt = False
 
 ret = k7f.FMT_CTRL(clip, h_max=1200, h_ret=True)
 clip = k7f.FMT_CTRL(clip, h_max=H_Pre, fmt_pix=1 if Lk_Fmt else 0)
-clip = k7f.ESRGAN_NV(clip, lt_hd=Lt_Hd, model=Model, scale=Scale, gpu=Gpu, gpu_t=Gpu_T, st_eng=St_Eng, ws_size=Ws_Size)
+clip = k7f.ESRGAN_NV(clip, lt_hd=Lt_Hd, model=Model, scale=4 if Model==2 else 2, gpu=Gpu, gpu_t=Gpu_T, st_eng=St_Eng, ws_size=Ws_Size)
 clip = k7f.FMT_CTRL(clip, h_max=H_Max, fmt_pix=1 if Lk_Fmt else 0)
 
 clip.set_output()

@@ -18,7 +18,7 @@ Abs = True
 Nvof = False
 Gpu = 0
 Lk_Fmt = False
-## 整数，预降低处理源高度
+## 整数，预降低处理源高度（填你的显示器高度）
 ## 整数， Fps_Num/Fps_Den 的计算结果即最终帧率或倍率
 ## 整数
 ## <True|False> 输出帧率(True)还是倍率(False)

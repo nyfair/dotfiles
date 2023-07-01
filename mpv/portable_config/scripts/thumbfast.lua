@@ -1,6 +1,6 @@
 --[[
 SOURCE_ https://github.com/po5/thumbfast/blob/master/thumbfast.lua
-COMMIT_ 8aa6faf10adad899e05cc9b850cde904d37515be
+COMMIT_ 4241c7daa444d3859b51b65a39d30e922adb87e9
 
 适配多个OSC类脚本的新缩略图引擎
 
@@ -260,8 +260,8 @@ local auto_run = options.auto_run
 
 local function info(w, h)
     local short_video = mp.get_property_number("duration", 0) <= options.min_duration
-    local image = properties["current-tracks"] and properties["current-tracks"]["video"] and properties["current-tracks"]["video"]["image"]
-    local albumart = image and properties["current-tracks"]["video"]["albumart"]
+    local image = properties["current-tracks/video"] and properties["current-tracks/video"]["image"]
+    local albumart = image and properties["current-tracks/video"]["albumart"]
 
     disabled = (w or 0) == 0 or (h or 0) == 0 or
         has_vid == 0 or
@@ -692,8 +692,7 @@ local function update_tracklist(name, value)
     -- current-tracks shim
     for _, track in ipairs(value) do
         if track.type == "video" and track.selected then
-            properties["current-tracks/video/image"] = track.image
-            properties["current-tracks/video/albumart"] = track.albumart
+            properties["current-tracks/video"] = track
             return
         end
     end
@@ -748,7 +747,7 @@ local function shutdown()
     end
 end
 
-mp.observe_property("current-tracks", "native", function(name, value)
+mp.observe_property("current-tracks/video", "native", function(name, value)
     update_property(name, value)
 end)
 

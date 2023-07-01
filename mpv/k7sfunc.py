@@ -2,7 +2,7 @@
 ### 文档： https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
 ##################################################
 
-__version__ = "0.1.20"
+__version__ = "0.1.21"
 
 __all__ = [
 	"FMT_CHANGE", "FMT_CTRL", "FPS_CHANGE", "FPS_CTRL",
@@ -562,7 +562,7 @@ def CUGAN_NV(
 def ESRGAN_DML(
 	input : vs.VideoNode,
 	lt_hd : bool = False,
-	model : typing.Literal[0, 2, 5000, 5001, 5002, 5003, 5004] = 5000,
+	model : typing.Literal[0, 2, 5005, 5006, 5007] = 5005,
 	scale : typing.Literal[1, 2, 3, 4] = 2,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : int = 2,
@@ -574,7 +574,7 @@ def ESRGAN_DML(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(lt_hd, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
-	if model not in [0, 2, 5000, 5001, 5002, 5003, 5004] :
+	if model not in [0, 2, 5005, 5006, 5007] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if scale not in [1, 2, 3, 4] :
 		raise vs.Error(f"模块 {func_name} 的子参数 scale 的值无效")
@@ -612,7 +612,7 @@ def ESRGAN_DML(
 def ESRGAN_NV(
 	input : vs.VideoNode,
 	lt_hd : bool = False,
-	model : typing.Literal[0, 2, 5000, 5001, 5002, 5003, 5004] = 5000,
+	model : typing.Literal[0, 2, 5005, 5006, 5007] = 5005,
 	scale : typing.Literal[1, 2, 3, 4] = 2,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : int = 2,
@@ -626,7 +626,7 @@ def ESRGAN_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(lt_hd, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
-	if model not in [0, 2, 5000, 5001, 5002, 5003, 5004] :
+	if model not in [0, 2, 5005, 5006, 5007] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if scale not in [1, 2, 3, 4] :
 		raise vs.Error(f"模块 {func_name} 的子参数 scale 的值无效")
@@ -1405,11 +1405,14 @@ def SVP_PRO(
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
 	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+	size_in = w_in * h_in
 	multi = "true" if abs else "false"
 	acc = 1 if cpu == 0 else 0
+	ana_lv = 5 if size_in > 510272 else 2
 
 	super_param = "{pel:1,gpu:%d,full:true,scale:{up:2,down:4}}" % (acc)
-	analyse_param = "{vectors:3,block:{w:32,h:32,overlap:1},main:{levels:5,search:{type:4,distance:3,sort:true,satd:false,coarse:{width:960,type:4,distance:4,satd:true,trymany:false,bad:{sad:1000,range:0}}},penalty:{lambda:3.0,plevel:1.3,lsad:8000,pnew:50,pglobal:50,pzero:100,pnbour:65,prev:0}},refine:[{thsad:800,search:{type:4,distance:1,satd:false},penalty:{pnew:50}}]}"
+	analyse_param = "{vectors:3,block:{w:32,h:32,overlap:1},main:{levels:%d,search:{type:4,distance:3,sort:true,satd:false,coarse:{width:960,type:4,distance:4,satd:true,trymany:false,bad:{sad:1000,range:0}}},penalty:{lambda:3.0,plevel:1.3,lsad:8000,pnew:50,pglobal:50,pzero:100,pnbour:65,prev:0}},refine:[{thsad:800,search:{type:4,distance:1,satd:false},penalty:{pnew:50}}]}" % (ana_lv)
 	smooth_param = "{rate:{num:%d,den:%d,abs:%s},algo:13,block:false,cubic:%d,gpuid:%d,linear:true,mask:{cover:40,area:16,area_sharp:0.7},scene:{mode:3,blend:false,limits:{m1:2400,m2:3601,scene:5002,zero:125,blocks:40},luma:1.5}}" % (fps_num, fps_den, multi, acc, gpu)
 	smooth_nvof_param = smooth_param
 

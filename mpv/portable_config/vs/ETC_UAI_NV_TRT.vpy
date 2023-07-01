@@ -1,5 +1,5 @@
 ### https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
-### Real-ESRGAN 放大或降噪，性能要求极高，N卡专用
+### 使用自定义的AI放大模型，N卡专用
 
 import vapoursynth as vs
 from vapoursynth import core
@@ -12,27 +12,27 @@ clip = video_in
 ############
 
 H_Pre = 720
-Lt_Hd = False
-Model = 5005
+Model = "Bubblemint864_AnimeScaleV1_Compact_x2_fp16_opset14.onnx"
 Gpu = 0
 Gpu_T = 2
-St_Eng = False
+Res_Opt = [1280, 720]
+Res_Max = [1920, 1200]
 Ws_Size = 0
 H_Max = 1440
 Lk_Fmt = False
 ## 整数，预降低处理源高度
-## <True|False> 是否对超过HD分辨率（720P）的源进行处理
-## <0|2|5005|5006|5007> 使用的模型
+## 使用的模型
 ## 使用的显卡序号，0为排序一号
 ## <1|2|3> 使用的显卡线程数
-## <True|False> 是否使用静态引擎（需要对不同分辨率的源各进行预处理）；动态引擎自适应不同分辨率（64²→DCI2K）
-## <0~1024> 约束显存（MiB），静态引擎的最小值为128（动态引擎自动双倍），设为低于此数的值即为不限制
+## 优化源分辨率（高度不大于 H_Pre）
+## 最大支持的源分辨率
+## <0~1024> 整数，约束显存（MiB），最小值为128，设为低于此数的值即为不限制
 ## 整数，输出高度限制（填你的显示器高度）
 ## <True|False> 是否锁定像素格式为yuv420p8
 
 ret = k7f.FMT_CTRL(clip, h_max=1200, h_ret=True)
 clip = k7f.FMT_CTRL(clip, h_max=H_Pre, fmt_pix=1 if Lk_Fmt else 0)
-clip = k7f.ESRGAN_NV(clip, lt_hd=Lt_Hd, model=Model, scale=4 if Model==2 else 2, gpu=Gpu, gpu_t=Gpu_T, st_eng=St_Eng, ws_size=Ws_Size)
+clip = k7f.UAI_NV_TRT(clip, clamp=False, model_pth=Model, opt_lv=3, cuda_opt=[0, 0, 0], fp16=True, tf32=True, gpu=Gpu, gpu_t=Gpu_T, st_eng=False, res_opt=Res_Opt, res_max=Res_Max, ws_size=Ws_Size)
 clip = k7f.FMT_CTRL(clip, h_max=H_Max, fmt_pix=1 if Lk_Fmt else 0)
 
 clip.set_output()

@@ -16,7 +16,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-// Description: guided_lgc.glsl: Luma-guided-chroma denoising.
+// Description: guided_fast.glsl: Fast.
 
 /* The radius can be adjusted with the MEANI stage's downscaling factor. 
  * Higher numbers give a bigger radius.
@@ -30,20 +30,24 @@
  * factor. Higher numbers downscale more.
  */
 
+//!HOOK LUMA
 //!HOOK CHROMA
-//!BIND LUMA
-//!WIDTH LUMA.w
-//!HEIGHT LUMA.h
-//!DESC Guided filter (I, share)
+//!HOOK RGB
+//!BIND HOOKED
+//!WIDTH HOOKED.w 2 /
+//!HEIGHT HOOKED.h 2 /
+//!DESC Guided filter (I)
 //!SAVE I
 
 vec4 hook()
 {
-	return LUMA_texOff(0);
+	return HOOKED_texOff(0);
 }
 
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter (P)
 //!BIND HOOKED
 //!WIDTH I.w
@@ -55,19 +59,23 @@ vec4 hook()
 	return HOOKED_texOff(0);
 }
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter (MEANI)
 //!BIND I
 //!SAVE MEANI
-//!WIDTH I.w 2.0 /
-//!HEIGHT I.h 2.0 /
+//!WIDTH I.w 1.5 /
+//!HEIGHT I.h 1.5 /
 
 vec4 hook()
 {
 	return I_texOff(0);
 }
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter (MEANP)
 //!BIND P
 //!WIDTH MEANI.w
@@ -79,7 +87,9 @@ vec4 hook()
 	return P_texOff(0);
 }
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter (I_SQ)
 //!BIND I
 //!WIDTH I.w
@@ -91,7 +101,9 @@ vec4 hook()
 	return I_texOff(0) * I_texOff(0);
 }
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter (IXP)
 //!BIND I
 //!BIND P
@@ -104,7 +116,9 @@ vec4 hook()
 	return I_texOff(0) * P_texOff(0);
 }
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter (CORRI)
 //!BIND I_SQ
 //!WIDTH MEANI.w
@@ -116,7 +130,9 @@ vec4 hook()
 	return I_SQ_texOff(0);
 }
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter (CORRP)
 //!BIND IXP
 //!WIDTH MEANI.w
@@ -128,7 +144,9 @@ vec4 hook()
 	return IXP_texOff(0);
 }
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter (A)
 //!BIND MEANI
 //!BIND MEANP
@@ -138,7 +156,7 @@ vec4 hook()
 //!HEIGHT I.h
 //!SAVE A
 
-#define E 100.0
+#define E 0.0013
 
 vec4 hook()
 {
@@ -147,7 +165,9 @@ vec4 hook()
 	return cov / (var + E);
 }
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter (B)
 //!BIND A
 //!BIND MEANI
@@ -161,7 +181,9 @@ vec4 hook()
 	return MEANP_texOff(0) - A_texOff(0) * MEANI_texOff(0);
 }
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter (MEANA)
 //!BIND A
 //!WIDTH MEANI.w
@@ -173,7 +195,9 @@ vec4 hook()
 	return A_texOff(0);
 }
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter (MEANB)
 //!BIND B
 //!WIDTH MEANI.w
@@ -185,7 +209,9 @@ vec4 hook()
 	return B_texOff(0);
 }
 
+//!HOOK LUMA
 //!HOOK CHROMA
+//!HOOK RGB
 //!DESC Guided filter
 //!BIND HOOKED
 //!BIND MEANA

@@ -2,14 +2,14 @@
 ### 文档： https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
 ##################################################
 
-__version__ = "0.1.21"
+__version__ = "0.1.22"
 
 __all__ = [
 	"FMT_CHANGE", "FMT_CTRL", "FPS_CHANGE", "FPS_CTRL",
-	"ACNET_STD", "CUGAN_NV", "ESRGAN_DML", "ESRGAN_NV", "NNEDI3_STD", "WAIFU_DML", "WAIFU_NV",
+	"ACNET_STD", "CUGAN_NV", "ESRGAN_DML", "ESRGAN_NV", "EDI_US_STD", "WAIFU_DML", "WAIFU_NV",
 	"MVT_LQ", "MVT_STD", "MVT_POT", "MVT_MQ", "RIFE_STD", "RIFE_NV", "RIFE_NV_ORT", "SVP_LQ", "SVP_STD", "SVP_HQ", "SVP_PRO",
 	"BILA_NV", "BM3D_NV", "CCD_STD", "DFTT_STD", "DFTT_NV", "FFT3D_STD", "NLM_STD", "NLM_NV",
-	"AA_NV", "COLOR_P3W_FIX", "CSC_RB", "DEBAND_STD", "DEINT_LQ", "DEINT_STD", "DEINT_EX", "IVTC_STD", "STAB_STD", "STAB_HQ", "UAI_DML", "UAI_NV_TRT",
+	"COLOR_P3W_FIX", "CSC_RB", "DEBAND_STD", "DEINT_LQ", "DEINT_STD", "DEINT_EX", "EDI_AA_STD", "EDI_AA_NV", "IVTC_STD", "STAB_STD", "STAB_HQ", "UAI_DML", "UAI_NV_TRT",
 ]
 
 import os
@@ -672,7 +672,7 @@ def ESRGAN_NV(
 ## NNEDI3放大
 ##################################################
 
-def NNEDI3_STD(
+def EDI_US_STD(
 	input : vs.VideoNode,
 	ext_proc : bool = True,
 	nsize : typing.Literal[0, 4] = 4,
@@ -682,7 +682,7 @@ def NNEDI3_STD(
 	vs_t : int = vs_thd_dft,
 ) -> vs.VideoNode :
 
-	func_name = "NNEDI3_STD"
+	func_name = "EDI_US_STD"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(ext_proc, bool) :
@@ -1892,36 +1892,6 @@ def NLM_NV(
 	return output
 
 ##################################################
-## EEID2抗锯齿
-##################################################
-
-def AA_NV(
-	input : vs.VideoNode,
-#	plane : typing.List[int] = [0],
-	gpu : typing.Literal[-1, 0, 1, 2] = -1,
-	gpu_t : int = 4,
-	vs_t : int = vs_thd_dft,
-) -> vs.VideoNode :
-
-	func_name = "AA_NV"
-	if not isinstance(input, vs.VideoNode) :
-		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-#	if plane not in ([0], [1], [2], [0, 1], [0, 2], [1, 2], [0, 1, 2]) :
-#		raise vs.Error(f"模块 {func_name} 的子参数 plane 的值无效")
-	if gpu not in [-1, 0, 1, 2] :
-		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if not isinstance(gpu_t, int) or gpu_t <= 0 :
-		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
-	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
-		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
-
-	core.num_threads = vs_t
-
-	output = core.eedi2cuda.AA2(clip=input, mthresh=10, lthresh=20, vthresh=20, estr=2, dstr=4, maxd=24, map=0, nt=50, pp=1, num_streams=gpu_t, device_id=gpu)
-
-	return output
-
-##################################################
 ## https://github.com/mpv-player/mpv/issues/11460
 ## 修复p3错误转换后的白点
 ##################################################
@@ -2210,6 +2180,75 @@ def DEINT_EX(
 		from qtgmc import QTGMCv2
 
 	output = QTGMCv2(input=input, fps_in=fps_in, obs=obs, deint_lv=deint_lv, src_type=src_type, deint_den=deint_den, tff=tff, cpu=cpu, gpu=gpu, check=False)
+
+	return output
+
+##################################################
+## NNEDI3抗锯齿
+##################################################
+
+def EDI_AA_STD(
+	input : vs.VideoNode,
+	cpu : bool = True,
+	gpu : typing.Literal[-1, 0, 1, 2] = -1,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "EDI_AA_STD"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(cpu, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 cpu 的值无效")
+	if gpu not in [-1, 0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+
+	if cpu :
+		clip = core.znedi3.nnedi3(clip=input, field=1, dh=True)
+		clip = core.std.Transpose(clip=clip)
+		clip = core.znedi3.nnedi3(clip=clip, field=1, dh=True)
+		clip = core.std.Transpose(clip=clip)
+	else:
+		clip = core.nnedi3cl.NNEDI3CL(clip=input, field=1, dh=True, device=gpu)
+		clip = core.std.Transpose(clip=clip)
+		clip = core.nnedi3cl.NNEDI3CL(clip=clip, field=1, dh=True, device=gpu)
+		clip = core.std.Transpose(clip=clip)
+
+	output = core.resize.Spline36(clip=clip, width=w_in, height=h_in, src_left=-0.5, src_top=-0.5)
+
+	return output
+
+##################################################
+## EEID2抗锯齿
+##################################################
+
+def EDI_AA_NV(
+	input : vs.VideoNode,
+#	plane : typing.List[int] = [0],
+	gpu : typing.Literal[-1, 0, 1, 2] = -1,
+	gpu_t : int = 4,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "EDI_AA_NV"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+#	if plane not in ([0], [1], [2], [0, 1], [0, 2], [1, 2], [0, 1, 2]) :
+#		raise vs.Error(f"模块 {func_name} 的子参数 plane 的值无效")
+	if gpu not in [-1, 0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	core.num_threads = vs_t
+
+	output = core.eedi2cuda.AA2(clip=input, mthresh=10, lthresh=20, vthresh=20, estr=2, dstr=4, maxd=24, map=0, nt=50, pp=1, num_streams=gpu_t, device_id=gpu)
 
 	return output
 

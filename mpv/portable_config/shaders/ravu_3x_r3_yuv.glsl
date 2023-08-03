@@ -18,7 +18,7 @@
 //!BIND ravu_3x_lut3
 //!WIDTH 3 HOOKED.w *
 //!HEIGHT 3 HOOKED.h *
-//!WHEN HOOKED.w OUTPUT.w / 0.471404 < HOOKED.h OUTPUT.h / 0.471404 < * LUMA.w 0 > *
+//!WHEN HOOKED.w OUTPUT.w / 0.454545 < HOOKED.h OUTPUT.h / 0.454545 < * LUMA.w 0 > *
 //!COMPUTE 96 24 32 8
 shared vec3 inp[432];
 shared float inp_luma[432];
@@ -156,15 +156,15 @@ res1[0] = clamp(res1[0], 0.0, 1.0);
 res1[1] = clamp(res1[1], 0.0, 1.0);
 res1[2] = clamp(res1[2], 0.0, 1.0);
 res1[3] = clamp(res1[3], 0.0, 1.0);
-imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(0, 0), vec4(res0[0], 0.0));
-imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(0, 1), vec4(res0[1], 0.0));
-imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(0, 2), vec4(res0[2], 0.0));
-imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(1, 0), vec4(res0[3], 0.0));
-imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(1, 1), vec4(inp[local_pos + 26], 0.0));
-imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(1, 2), vec4(res1[0], 0.0));
-imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(2, 0), vec4(res1[1], 0.0));
-imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(2, 1), vec4(res1[2], 0.0));
-imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(2, 2), vec4(res1[3], 0.0));
+imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(0, 0), vec4(res0[0], 1.0));
+imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(0, 1), vec4(res0[1], 1.0));
+imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(0, 2), vec4(res0[2], 1.0));
+imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(1, 0), vec4(res0[3], 1.0));
+imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(1, 1), vec4(inp[local_pos + 26], 1.0));
+imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(1, 2), vec4(res1[0], 1.0));
+imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(2, 0), vec4(res1[1], 1.0));
+imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(2, 1), vec4(res1[2], 1.0));
+imageStore(out_image, ivec2(gl_GlobalInvocationID) * 3 + ivec2(2, 2), vec4(res1[3], 1.0));
 }
 //!TEXTURE ravu_3x_lut3
 //!SIZE 26 216

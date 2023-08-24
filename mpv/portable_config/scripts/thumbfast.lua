@@ -32,7 +32,7 @@ local options = {
     binpath = "mpv",             -- 自定义mpv路径
     min_duration = 0,            -- 对短视频关闭预览（秒）
     precise = 0,                 -- 预览精度
-    quality = 0,                 -- 预览质量
+    quality = 0,                 -- 预览质量 require vf_libplacebo for 3
     frequency = 0.1,             -- 解码频率（秒）
     auto_run = true,             -- 自动运行
 
@@ -311,9 +311,10 @@ if quality == 0 then
     end
     if options.sw_threads >= 3 then
         quality = 2
-        if options.sw_threads >= 5 then
-            quality = 3
-        end
+--      https://github.com/mpv-player/mpv/issues/11993
+--      if options.sw_threads >= 5 then
+--          quality = 3
+--      end
     elseif options.sw_threads == 1 then
         quality = 1
     end
@@ -473,6 +474,10 @@ end
 local function real_res(req_w, req_h, filesize)
     local count = filesize / 4
     local diff = (req_w * req_h) - count
+
+    if (properties["video-params"] and properties["video-params"]["rotate"] or 0) % 180 == 90 then
+        req_w, req_h = req_h, req_w
+    end
 
     if diff == 0 then
         return req_w, req_h

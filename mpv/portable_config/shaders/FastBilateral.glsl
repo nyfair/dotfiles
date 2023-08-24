@@ -20,6 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+// MOD of FastBilateral_next.glsl
+
+
 //!HOOK CHROMA
 //!BIND CHROMA
 //!BIND LUMA
@@ -29,12 +32,10 @@
 //!OFFSET ALIGN
 //!DESC [FastBilateral]
 
+#define intensity_coeff  64.0   // float <0.0-+∞> Controls the shape of the Gaussian filter used for intensity-distance weighting. Higher values decrease the contribution of pixels with distant luminosities
+
 float comp_wi(float distance) {
-    if (distance < 0.1) {
-        return 1.0;
-    } else {
-        return 1e-8;
-    }
+    return exp(-intensity_coeff * distance * distance);
 }
 
 vec4 hook() {
@@ -43,7 +44,7 @@ vec4 hook() {
     pp -= fp;
 
     float luma_00 = LUMA_texOff(0).x;
-    
+
     vec2 chroma_11 = CHROMA_tex(vec2(fp + vec2(0.5)) * CHROMA_pt).xy;
     vec2 chroma_12 = CHROMA_tex(vec2(fp + vec2(0.5, 1.5)) * CHROMA_pt).xy;
     vec2 chroma_21 = CHROMA_tex(vec2(fp + vec2(1.5, 0.5)) * CHROMA_pt).xy;
@@ -76,3 +77,4 @@ vec4 hook() {
     output_pix.xy = ct / wt;
     return  output_pix;
 }
+

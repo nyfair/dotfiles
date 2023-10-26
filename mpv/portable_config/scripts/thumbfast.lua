@@ -311,10 +311,9 @@ if quality == 0 then
     end
     if options.sw_threads >= 3 then
         quality = 2
---      https://github.com/mpv-player/mpv/issues/11993
---      if options.sw_threads >= 5 then
---          quality = 3
---      end
+        if options.sw_threads >= 6 then
+            quality = 3
+        end
     elseif options.sw_threads == 1 then
         quality = 1
     end
@@ -335,7 +334,7 @@ local function quality_fin()
             vf_str = vf_str_pre..":flags=bicublin,format=fmt=gbrapf32,zscale=t=linear:npl=203,tonemap=tonemap=hable:desat=0.0,zscale=p=709:t=709:m=709,"..vf_str_suffix
         end
     elseif quality == 3 then
-        vf_str = "libplacebo=w="..effective_w..":h="..effective_h..":colorspace=bt709:color_primaries=bt709:color_trc=bt709:tonemapping=hable:format=bgra"
+        vf_str = "lavfi=[libplacebo=w="..effective_w..":h="..effective_h..":colorspace=bt709:color_primaries=bt709:color_trc=bt709:tonemapping=hable:format=bgra]"
     end
     return vf_str
 end

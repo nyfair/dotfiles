@@ -1,19 +1,24 @@
+##################################################
+### K7sfunc 的可选附属脚本
+##################################################
 
-__version__ = "0.0.3"
+__version__ = "0.1.1"
 
 __all__ = ["QTGMC", "QTGMC_obs", "QTGMCv2"]
 
-import vapoursynth as vs
-from vapoursynth import core
-import typing
+
+from distutils.version import LooseVersion
 import functools
 import math
+import typing
+import vapoursynth as vs
 
+core = vs.core
 vstools = None
 QTGMC_globals = {}
 dfttest2 = None
 
-### MOD HAvsFunc (0f6a7d9d9712d59b4e74e1e570fc6e3a526917f9)
+### MOD HAvsFunc (f11d79c98589c9dcb5b10beec35b631db68b495c)
 
 def QTGMC(
 	Input: vs.VideoNode,
@@ -370,6 +375,8 @@ def QTGMC(
 	global dfttest2
 	if dfttest2 is None :
 		import dfttest2
+	if LooseVersion(dfttest2.__version__) < LooseVersion("0.3.3") :
+		raise EnvironmentError("依赖 dfttest2 的版本号过低，至少 0.3.3")
 
 	def _average_frames(
 		clip: vs.VideoNode, weights: float | typing.Sequence[float], scenechange: float | None = None, planes: vstools.PlanesT = None
@@ -850,8 +857,7 @@ def QTGMC(
 				]
 			)
 		if Denoiser == 'bm3d':
-			import mvsfunc as mvf
-			dnWindow = mvf.BM3D(noiseWindow, radius1=NoiseTR, sigma=[Sigma if vstools.plane in CNplanes else 0 for vstools.plane in range(3)])
+			dnWindow = vsdenoise.BM3D.denoise(noiseWindow, Sigma, NoiseTR, planes=CNplanes)
 		elif Denoiser == 'dfttest':
 			dnWindow = dfttest2.DFTTest(clip=noiseWindow, sigma=Sigma * 4, tbsize=noiseTD, planes=CNplanes) #TODO:GPU
 		elif Denoiser in ['knlm', 'knlmeanscl']:
@@ -1658,6 +1664,8 @@ def QTGMC_obs(
 	global dfttest2
 	if dfttest2 is None :
 		import dfttest2
+	if LooseVersion(dfttest2.__version__) < LooseVersion("0.3.3") :
+		raise EnvironmentError("依赖 dfttest2 的版本号过低，至少 0.3.3")
 
 	def _Clamp(clip, bright_limit, dark_limit, overshoot=0, undershoot=0, planes=None):
 		if not (isinstance(clip, vs.VideoNode) and isinstance(bright_limit, vs.VideoNode) and isinstance(dark_limit, vs.VideoNode)):
@@ -2650,29 +2658,9 @@ def QTGMCv2(
 	tff : typing.Literal[0, 1, 2] = 0,
 	cpu : bool = True,
 	gpu : typing.Literal[-1, 0, 1, 2] = -1,
-	check : bool = True,
 ) -> vs.VideoNode:
 
-	if check :
-		func_name = "QTGMCv2"
-		if not isinstance(input, vs.VideoNode) :
-			raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-		if fps_in <= 0.0 :
-			raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
-		if not isinstance(obs, bool) :
-			raise vs.Error(f"模块 {func_name} 的子参数 obs 的值无效")
-		if deint_lv not in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] :
-			raise vs.Error(f"模块 {func_name} 的子参数 deint_lv 的值无效")
-		if src_type not in [0, 1, 2, 3] :
-			raise vs.Error(f"模块 {func_name} 的子参数 src_type 的值无效")
-		if deint_den not in [1, 2] :
-			raise vs.Error(f"模块 {func_name} 的子参数 deint_den 的值无效")
-		if tff not in [0, 1, 2] :
-			raise vs.Error(f"模块 {func_name} 的子参数 tff 的值无效")
-		if not isinstance(cpu, bool) :
-			raise vs.Error(f"模块 {func_name} 的子参数 cpu 的值无效")
-		if gpu not in [-1, 0, 1, 2] :
-			raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	##TODO: 依赖检查
 
 	if not tff :
 		field_src = getattr(input.get_frame(0).props, "_FieldBased", 1)

@@ -5,7 +5,62 @@
 
 --- In place sorting of filenames
 ---@param filenames string[]
-function sort_filenames(filenames)
+
+----- winapi start -----
+-- in windows system, we can use the sorting function provided by the win32 API
+-- see https://learn.microsoft.com/en-us/windows/win32/api/shlwapi/nf-shlwapi-strcmplogicalw
+-- this function was taken from https://github.com/mpvnet-player/mpv.net/issues/575#issuecomment-1817413401
+local winapi = {}
+
+if state.platform == 'windows' then
+	-- is_ffi_loaded is false usually means the mpv builds without luajit
+	local is_ffi_loaded, ffi = pcall(require, 'ffi')
+
+	if is_ffi_loaded then
+		winapi = {
+			ffi = ffi,
+			C = ffi.C,
+			CP_UTF8 = 65001,
+			shlwapi = ffi.load('shlwapi'),
+		}
+
+		-- ffi code from https://github.com/po5/thumbfast, Mozilla Public License Version 2.0
+		ffi.cdef[[
+			int __stdcall MultiByteToWideChar(unsigned int CodePage, unsigned long dwFlags, const char *lpMultiByteStr,
+			int cbMultiByte, wchar_t *lpWideCharStr, int cchWideChar);
+			int __stdcall StrCmpLogicalW(wchar_t *psz1, wchar_t *psz2);
+		]]
+
+		winapi.utf8_to_wide = function(utf8_str)
+			if utf8_str then
+				local utf16_len = winapi.C.MultiByteToWideChar(winapi.CP_UTF8, 0, utf8_str, -1, nil, 0)
+
+				if utf16_len > 0 then
+					local utf16_str = winapi.ffi.new('wchar_t[?]', utf16_len)
+
+					if winapi.C.MultiByteToWideChar(winapi.CP_UTF8, 0, utf8_str, -1, utf16_str, utf16_len) > 0 then
+						return utf16_str
+					end
+				end
+			end
+
+			return ''
+		end
+	end
+end
+----- winapi end -----
+
+function sort_filenames_windows(filenames)
+	table.sort(filenames, function(a, b)
+		local a_wide = winapi.utf8_to_wide(a)
+		local b_wide = winapi.utf8_to_wide(b)
+		return winapi.shlwapi.StrCmpLogicalW(a_wide, b_wide) == -1
+	end)
+
+	return filenames
+end
+
+function sort_filenames_lua(filenames)
 	-- alphanum sorting for humans in Lua
 	-- http://notebook.kulchenko.com/algorithms/alphanumeric-natural-sorting-for-humans-in-lua
 	local function padnum(n, d)
@@ -22,6 +77,15 @@ function sort_filenames(filenames)
 	end)
 	for i, tuple in ipairs(tuples) do filenames[i] = tuple[2] end
 	return filenames
+end
+
+function sort_filenames(filenames)
+	local is_ffi_loaded = pcall(require, 'ffi')
+	if state.platform == 'windows' and is_ffi_loaded then
+		sort_filenames_windows(filenames)
+	else
+		sort_filenames_lua(filenames)
+	end
 end
 
 -- Creates in-between frames to animate value from `from` to `to` numbers.
@@ -421,7 +485,7 @@ end
 ---@param current_index number
 ---@param delta number 1 or -1 for forward or backward
 function decide_navigation_in_list(paths, current_index, delta)
-	if #paths < 2 then return #paths, paths[#paths] end
+	if #paths < 2 then return end
 	delta = delta < 0 and -1 or 1
 
 	-- Shuffle looks at the played files history trimmed to 80% length of the paths
@@ -685,7 +749,7 @@ function normalize_chapters(chapters)
 	table.sort(chapters, function(a, b) return a.time < b.time end)
 	-- Ensure titles
 	for index, chapter in ipairs(chapters) do
-		chapter.title = chapter.title or (lang._chapter_list_submenu_item_title .. index)
+		chapter.title = chapter.title or (ulang._chapter_list_submenu_item_title .. index)
 		chapter.lowercase_title = chapter.title:lower()
 	end
 	return chapters
@@ -722,6 +786,42 @@ function find_active_keybindings(key)
 		end
 	end
 	return not key and active or active[key]
+end
+
+---@param type 'sub'|'audio'|'video'
+---@param path string
+function load_track(type, path)
+	mp.commandv(type .. '-add', path, 'cached')
+	-- If subtitle track was loaded, assume the user also wants to see it -- 反对
+	--if type == 'sub' then
+		--mp.commandv('set', 'sub-visibility', 'yes')
+	--end
+end
+
+---@return string|nil
+function get_clipboard()
+	local result = mp.command_native({
+		name = 'subprocess',
+		capture_stderr = true,
+		capture_stdout = true,
+		playback_only = false,
+		args = {config.ziggy_path, 'get-clipboard'},
+	})
+
+	local function print_error(message)
+		msg.error('Getting clipboard data failed. Error: ' .. message)
+	end
+
+	if result.status == 0 then
+		local data = utils.parse_json(result.stdout)
+		if data and data.payload then
+			return data.payload
+		else
+			print_error(data and (data.error and data.message or 'unknown error') or 'couldn\'t parse json')
+		end
+	else
+		print_error('exit code ' .. result.status .. ': ' .. result.stdout .. result.stderr)
+	end
 end
 
 --[[ RENDERING ]]

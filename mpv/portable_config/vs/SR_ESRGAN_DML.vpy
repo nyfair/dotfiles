@@ -28,7 +28,7 @@ Lk_Fmt = False
 
 ret = k7f.FMT_CTRL(clip, h_max=1200, h_ret=True)
 clip = k7f.FMT_CTRL(clip, h_max=H_Pre, fmt_pix=1 if Lk_Fmt else 0)
-clip = k7f.ESRGAN_DML(clip, lt_hd=Lt_Hd, model=Model, scale=4 if Model==2 else 2, gpu=Gpu, gpu_t=Gpu_T)
+clip = k7f.ESRGAN_DML(clip, lt_hd=Lt_Hd, model=Model, gpu=Gpu, gpu_t=Gpu_T)
 clip = k7f.FMT_CTRL(clip, h_max=H_Max, fmt_pix=1 if Lk_Fmt else 0)
 
 clip.set_output()

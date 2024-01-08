@@ -12,7 +12,7 @@ clip = video_in
 ############
 
 H_Pre = 720
-Model = "Bubblemint864_AnimeScaleV1_Compact_x2_fp16_opset14.onnx"
+Model = "Sirosky_AniScale2S_Compact_x2_fp16_op17.onnx"
 Gpu = 0
 Gpu_T = 2
 Res_Opt = [1280, 720]
@@ -32,7 +32,7 @@ Lk_Fmt = False
 
 ret = k7f.FMT_CTRL(clip, h_max=1200, h_ret=True)
 clip = k7f.FMT_CTRL(clip, h_max=H_Pre, fmt_pix=1 if Lk_Fmt else 0)
-clip = k7f.UAI_NV_TRT(clip, clamp=False, model_pth=Model, opt_lv=3, cuda_opt=[0, 0, 0], fp16=True, tf32=True, gpu=Gpu, gpu_t=Gpu_T, st_eng=False, res_opt=Res_Opt, res_max=Res_Max, ws_size=Ws_Size)
+clip = k7f.UAI_NV_TRT(clip, clamp=False, model_pth=Model, opt_lv=3, cuda_opt=[0, 0, 0], fp16=True, gpu=Gpu, gpu_t=Gpu_T, st_eng=False, res_opt=Res_Opt, res_max=Res_Max, ws_size=Ws_Size)
 clip = k7f.FMT_CTRL(clip, h_max=H_Max, fmt_pix=1 if Lk_Fmt else 0)
 
 clip.set_output()

@@ -12,7 +12,7 @@ clip = video_in
 ############
 
 H_Pre = 720
-Model = "Bubblemint864_AnimeScaleV1_Compact_x2_fp32_opset14.onnx"
+Model = "Sirosky_AniScale2S_Compact_x2_fp32_op17.onnx"
 Gpu = 0
 Gpu_T = 2
 H_Max = 1440

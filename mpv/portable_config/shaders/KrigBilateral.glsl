@@ -134,7 +134,7 @@ vec4 hook() {
     total.xyz /= total.w;
     float localVar = abs(total.y - total.x * total.x) + sigma_nsq;
     float Var = localVar + total.z;
-    float radius = mix(1.0, 2.0, sigma_nsq / Var);
+    float radius = 1.5;  // mix(1.5, 1.0, sigma_nsq / Var);
 
     float y = LUMA_texOff(0).x;
     float Mx[(N*(N+1))/2];

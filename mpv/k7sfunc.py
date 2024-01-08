@@ -2,22 +2,22 @@
 ### 文档： https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
 ##################################################
 
-__version__ = "0.1.23"
+__version__ = "0.4.6"
 
 __all__ = [
 	"FMT_CHANGE", "FMT_CTRL", "FPS_CHANGE", "FPS_CTRL",
-	"ACNET_STD", "CUGAN_NV", "ESRGAN_DML", "ESRGAN_NV", "EDI_US_STD", "WAIFU_DML", "WAIFU_NV",
-	"MVT_LQ", "MVT_STD", "MVT_POT", "MVT_MQ", "RIFE_STD", "RIFE_NV", "RIFE_NV_ORT", "SVP_LQ", "SVP_STD", "SVP_HQ", "SVP_PRO",
-	"BILA_NV", "BM3D_NV", "CCD_STD", "DFTT_STD", "DFTT_NV", "FFT3D_STD", "NLM_STD", "NLM_NV",
-	"COLOR_P3W_FIX", "CSC_RB", "DEBAND_STD", "DEINT_LQ", "DEINT_STD", "DEINT_EX", "EDI_AA_STD", "EDI_AA_NV", "IVTC_STD", "STAB_STD", "STAB_HQ", "UAI_DML", "UAI_NV_TRT",
+	"ACNET_STD", "CUGAN_NV", "EDI_US_STD", "ESRGAN_DML", "ESRGAN_NV", "NGU_HQ", "WAIFU_DML", "WAIFU_NV",
+	"MVT_LQ", "MVT_STD", "MVT_POT", "MVT_MQ", "RIFE_STD", "RIFE_NV", "SVP_LQ", "SVP_STD", "SVP_HQ", "SVP_PRO",
+	"BILA_NV", "BM3D_NV", "CCD_STD", "DFTT_STD", "DFTT_NV", "DPIR_NR_NV", "FFT3D_STD", "NLM_STD", "NLM_NV",
+	"COLOR_P3W_FIX", "CSC_RB", "DEBAND_STD", "DEINT_LQ", "DEINT_STD", "DEINT_EX", "DPIR_DBLK_NV", "EDI_AA_STD", "EDI_AA_NV", "IVTC_STD", "STAB_STD", "STAB_HQ", "UAI_DML", "UAI_NV_TRT", "UVR_MAD",
 ]
 
+from distutils.version import LooseVersion
+import fractions
+import math
 import os
 import typing
-import math
-
 import vapoursynth as vs
-from vapoursynth import core
 
 ##################################################
 ## 初始设置
@@ -37,10 +37,13 @@ else :
 	vs_thd_dft = vs_thd_init
 
 vs_api = vs.__api_version__.api_major
+if vs_api < 4 :
+	raise ImportError("帧服务器 VapourSynth 的版本号过低，至少 R57")
 
+core = vs.core
 dfttest2 = None
 nnedi3_resample = None
-QTGMCv2 = None
+qtgmc = None
 vsmlrt = None
 
 ##################################################
@@ -394,9 +397,9 @@ def FPS_CHANGE(
 	func_name = "FPS_CHANGE"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
-	if fps_out <= 0.0 or fps_out == fps_in :
+	if not isinstance(fps_out, (int, float)) or fps_out <= 0.0 or fps_out == fps_in :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_out 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
@@ -412,9 +415,9 @@ def FPS_CHANGE(
 		attribute_clip = clip.std.BlankClip(length=math.floor(len(clip) * factor), fpsnum=fpsnum, fpsden=fpsden)
 		return attribute_clip.std.FrameEval(eval=_frame_adjuster)
 
-	src = core.std.AssumeFPS(clip=input, fpsnum=fps_in * 1000, fpsden=1000)
-	fin = _ChangeFPS(clip=src, fpsnum=fps_out * 1000, fpsden=1000)
-	output = core.std.AssumeFPS(clip=fin, fpsnum=fps_out * 1000, fpsden=1000)
+	src = core.std.AssumeFPS(clip=input, fpsnum=fps_in * 1e6, fpsden=1e6)
+	fin = _ChangeFPS(clip=src, fpsnum=fps_out * 1e6, fpsden=1e6)
+	output = core.std.AssumeFPS(clip=fin, fpsnum=fps_out * 1e6, fpsden=1e6)
 
 	return output
 
@@ -434,10 +437,10 @@ def FPS_CTRL(
 	func_name = "FPS_CTRL"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
 	if fps_out is not None :
-		if fps_out <= 0.0 :
+		if not isinstance(fps_out, (int, float)) or fps_out <= 0.0 :
 			raise vs.Error(f"模块 {func_name} 的子参数 fps_out 的值无效")
 	if not isinstance(fps_ret, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_ret 的值无效")
@@ -482,6 +485,9 @@ def ACNET_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_m 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "anime4kcpp") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 anime4kcpp")
 
 	core.num_threads = vs_t
 	fmt_in = input.format.id
@@ -528,9 +534,23 @@ def CUGAN_NV(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "trt") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 trt")
+
+	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
+	mdl_fname = ["pro-no-denoise3x-up2x", "pro-conservative-up2x", "pro-denoise3x-up2x"][[-1, 0, 3].index(nr_lv)]
+	mdl_pth = plg_dir + "/models/cugan/" + mdl_fname + ".onnx"
+	if not os.path.exists(mdl_pth) :
+		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
+
 	global vsmlrt
 	if vsmlrt is None :
-		import vsmlrt
+		try :
+			import vsmlrt
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.1") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 版本号过低，至少 3.18.1 。")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
@@ -543,121 +563,8 @@ def CUGAN_NV(
 	if not st_eng and (((w_in > 2048) or (h_in > 1080)) or ((w_in < 64) or (h_in < 64))) :
 		raise Exception("源分辨率不属于动态引擎支持的范围，已临时中止。")
 
-	cut1 = input.resize.Bilinear(format=vs.RGBH, matrix_in_s="709")
+	cut1 = core.resize.Bilinear(clip=input, format=vs.RGBH, matrix_in_s="709")
 	cut2 = vsmlrt.CUGAN(clip=cut1, noise=nr_lv, scale=2, version=2, backend=vsmlrt.BackendV2.TRT(
-		num_streams=gpu_t, force_fp16=True, output_format=1,
-		workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
-		use_cuda_graph=True, use_cublas=False, use_cudnn=False,
-		static_shape=st_eng, min_shapes=[0, 0] if st_eng else [64, 64],
-		opt_shapes=None if st_eng else ([1920, 1080] if lt_hd else [1280, 720]), max_shapes=None if st_eng else ([2048, 1080] if lt_hd else [1280, 720]),
-		device_id=gpu, short_path=True))
-	output = core.resize.Bilinear(clip=cut2, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
-
-	return output
-
-##################################################
-## Real-ESRGAN放大
-##################################################
-
-def ESRGAN_DML(
-	input : vs.VideoNode,
-	lt_hd : bool = False,
-	model : typing.Literal[0, 2, 5005, 5006, 5007] = 5005,
-	scale : typing.Literal[1, 2, 3, 4] = 2,
-	gpu : typing.Literal[0, 1, 2] = 0,
-	gpu_t : int = 2,
-	vs_t : int = vs_thd_dft,
-) -> vs.VideoNode :
-
-	func_name = "ESRGAN_DML"
-	if not isinstance(input, vs.VideoNode) :
-		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if not isinstance(lt_hd, bool) :
-		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
-	if model not in [0, 2, 5005, 5006, 5007] :
-		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
-	if scale not in [1, 2, 3, 4] :
-		raise vs.Error(f"模块 {func_name} 的子参数 scale 的值无效")
-	if gpu not in [0, 1, 2] :
-		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if not isinstance(gpu_t, int) or gpu_t <= 0 :
-		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
-	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
-		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
-
-	global vsmlrt
-	if vsmlrt is None :
-		import vsmlrt
-
-	core.num_threads = vs_t
-	w_in, h_in = input.width, input.height
-	size_in = w_in * h_in
-	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
-	fmt_in = input.format.id
-
-	if (not lt_hd and (size_in > 1280 * 720)) or (size_in > 2048 * 1080) :
-		raise Exception("源分辨率超过限制的范围，已临时中止。")
-
-	cut1 = input.resize.Bilinear(format=vs.RGBS, matrix_in_s="709")
-	cut2 = vsmlrt.RealESRGANv2(clip=cut1, scale=scale, model=model, backend=vsmlrt.BackendV2.ORT_DML(
-		device_id=gpu, num_streams=gpu_t, fp16=True))
-	output = core.resize.Bilinear(clip=cut2, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
-
-	return output
-
-##################################################
-## Real-ESRGAN放大
-##################################################
-
-def ESRGAN_NV(
-	input : vs.VideoNode,
-	lt_hd : bool = False,
-	model : typing.Literal[0, 2, 5005, 5006, 5007] = 5005,
-	scale : typing.Literal[1, 2, 3, 4] = 2,
-	gpu : typing.Literal[0, 1, 2] = 0,
-	gpu_t : int = 2,
-	st_eng : bool = False,
-	ws_size : int = 0,
-	vs_t : int = vs_thd_dft,
-) -> vs.VideoNode :
-
-	func_name = "ESRGAN_NV"
-	if not isinstance(input, vs.VideoNode) :
-		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if not isinstance(lt_hd, bool) :
-		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
-	if model not in [0, 2, 5005, 5006, 5007] :
-		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
-	if scale not in [1, 2, 3, 4] :
-		raise vs.Error(f"模块 {func_name} 的子参数 scale 的值无效")
-	if gpu not in [0, 1, 2] :
-		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if not isinstance(gpu_t, int) or gpu_t <= 0 :
-		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
-	if not isinstance(st_eng, bool) :
-		raise vs.Error(f"模块 {func_name} 的子参数 st_eng 的值无效")
-	if not isinstance(ws_size, int) or ws_size < 0 :
-		raise vs.Error(f"模块 {func_name} 的子参数 ws_size 的值无效")
-	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
-		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
-
-	global vsmlrt
-	if vsmlrt is None :
-		import vsmlrt
-
-	core.num_threads = vs_t
-	w_in, h_in = input.width, input.height
-	size_in = w_in * h_in
-	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
-	fmt_in = input.format.id
-
-	if (not lt_hd and (size_in > 1280 * 720)) or (size_in > 2048 * 1080) :
-		raise Exception("源分辨率超过限制的范围，已临时中止。")
-	if not st_eng and (((w_in > 2048) or (h_in > 1080)) or ((w_in < 64) or (h_in < 64))) :
-		raise Exception("源分辨率不属于动态引擎支持的范围，已临时中止。")
-
-	cut1 = input.resize.Bilinear(format=vs.RGBH, matrix_in_s="709")
-	cut2 = vsmlrt.RealESRGANv2(clip=cut1, scale=scale, model=model, backend=vsmlrt.BackendV2.TRT(
 		num_streams=gpu_t, force_fp16=True, output_format=1,
 		workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
 		use_cuda_graph=True, use_cublas=False, use_cudnn=False,
@@ -698,9 +605,23 @@ def EDI_US_STD(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "fmtc") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 fmtc")
+	if cpu :
+		if not hasattr(core, "znedi3") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 znedi3")
+	else :
+		if not hasattr(core, "nnedi3cl") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 nnedi3cl")
+
 	global nnedi3_resample
 	if nnedi3_resample is None :
-		import nnedi3_resample
+		try :
+			import nnedi3_resample
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 nnedi3_resample")
+	if LooseVersion(nnedi3_resample.__version__) < LooseVersion("2") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 nnedi3_resample 的版本号过低，至少 2")
 
 	core.num_threads = vs_t
 
@@ -725,6 +646,176 @@ def EDI_US_STD(
 	return output
 
 ##################################################
+## Real-ESRGAN放大
+##################################################
+
+def ESRGAN_DML(
+	input : vs.VideoNode,
+	lt_hd : bool = False,
+	model : typing.Literal[0, 2, 5005, 5006, 5007] = 5005,
+	gpu : typing.Literal[0, 1, 2] = 0,
+	gpu_t : int = 2,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "ESRGAN_DML"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(lt_hd, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
+	if model not in [0, 2, 5005, 5006, 5007] :
+		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
+	if gpu not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "ort") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 ort")
+
+	plg_dir = os.path.dirname(core.ort.Version()["path"]).decode()
+	mdl_fname = ["RealESRGANv2-animevideo-xsx2", "realesr-animevideov3", "animejanaiV2L1", "animejanaiV2L2", "animejanaiV2L3"][[0, 2, 5005, 5006, 5007].index(model)]
+	mdl_pth = plg_dir + "/models/RealESRGANv2/" + mdl_fname + ".onnx"
+	if not os.path.exists(mdl_pth) :
+		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
+
+	global vsmlrt
+	if vsmlrt is None :
+		try :
+			import vsmlrt
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.15.25") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.15.25")
+
+	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+	size_in = w_in * h_in
+	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+	fmt_in = input.format.id
+
+	if (not lt_hd and (size_in > 1280 * 720)) or (size_in > 2048 * 1080) :
+		raise Exception("源分辨率超过限制的范围，已临时中止。")
+
+	cut1 = core.resize.Bilinear(clip=input, format=vs.RGBS, matrix_in_s="709")
+	cut2 = vsmlrt.RealESRGANv2(clip=cut1, scale=4 if model==2 else 2, model=model, backend=vsmlrt.BackendV2.ORT_DML(
+		device_id=gpu, num_streams=gpu_t, fp16=True))
+	output = core.resize.Bilinear(clip=cut2, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+
+	return output
+
+##################################################
+## Real-ESRGAN放大
+##################################################
+
+def ESRGAN_NV(
+	input : vs.VideoNode,
+	lt_hd : bool = False,
+	model : typing.Literal[0, 2, 5005, 5006, 5007] = 5005,
+	gpu : typing.Literal[0, 1, 2] = 0,
+	gpu_t : int = 2,
+	st_eng : bool = False,
+	ws_size : int = 0,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "ESRGAN_NV"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(lt_hd, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
+	if model not in [0, 2, 5005, 5006, 5007] :
+		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
+	if gpu not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
+	if not isinstance(st_eng, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 st_eng 的值无效")
+	if not isinstance(ws_size, int) or ws_size < 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 ws_size 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "trt") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 trt")
+
+	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
+	mdl_fname = ["RealESRGANv2-animevideo-xsx2", "realesr-animevideov3", "animejanaiV2L1", "animejanaiV2L2", "animejanaiV2L3"][[0, 2, 5005, 5006, 5007].index(model)]
+	mdl_pth = plg_dir + "/models/RealESRGANv2/" + mdl_fname + ".onnx"
+	if not os.path.exists(mdl_pth) :
+		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
+
+	global vsmlrt
+	if vsmlrt is None :
+		try :
+			import vsmlrt
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.1") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.18.1")
+
+	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+	size_in = w_in * h_in
+	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+	fmt_in = input.format.id
+
+	if (not lt_hd and (size_in > 1280 * 720)) or (size_in > 2048 * 1080) :
+		raise Exception("源分辨率超过限制的范围，已临时中止。")
+	if not st_eng and (((w_in > 2048) or (h_in > 1080)) or ((w_in < 64) or (h_in < 64))) :
+		raise Exception("源分辨率不属于动态引擎支持的范围，已临时中止。")
+
+	cut1 = core.resize.Bilinear(clip=input, format=vs.RGBH, matrix_in_s="709")
+	cut2 = vsmlrt.RealESRGANv2(clip=cut1, scale=4 if model==2 else 2, model=model, backend=vsmlrt.BackendV2.TRT(
+		num_streams=gpu_t, force_fp16=True, output_format=1,
+		workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
+		use_cuda_graph=True, use_cublas=False, use_cudnn=False,
+		static_shape=st_eng, min_shapes=[0, 0] if st_eng else [64, 64],
+		opt_shapes=None if st_eng else ([1920, 1080] if lt_hd else [1280, 720]), max_shapes=None if st_eng else ([2048, 1080] if lt_hd else [1280, 720]),
+		device_id=gpu, short_path=True))
+	output = core.resize.Bilinear(clip=cut2, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+
+	return output
+
+##################################################
+## NGU放大
+##################################################
+
+def NGU_HQ(
+	input : vs.VideoNode,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "NGU_HQ"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "madvr") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 madvr")
+
+	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+	w_rs, h_rs = w_in * 2, h_in * 2
+	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+	fmt_in = input.format.id
+
+	mad_param = ["upscale(newWidth=%d,newHeight=%d,algo=nguAaHigh)" % (w_rs, h_rs), "setOutputFormat(format=yuv420,bitdepth=10)"]
+	if fmt_in == vs.YUV420P10 :
+		cut0 = input
+	else :
+		cut0 = core.resize.Bilinear(clip=input, format=vs.YUV420P10)
+	output = core.madvr.Process(clip=cut0, commands=mad_param, adapter=False)
+	if colorlv == 0 :
+		output = core.resize.Bilinear(clip=output, range=1)
+
+	return output
+
+##################################################
 ## Waifu2x放大
 ##################################################
 
@@ -733,7 +824,6 @@ def WAIFU_DML(
 	lt_hd : bool = False,
 	model : typing.Literal[3, 5, 6] = 3,
 	nr_lv : typing.Literal[-1, 0, 1, 2, 3] = 1,
-	scale : typing.Literal[1, 2, 3, 4] = 2,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : int = 2,
 	vs_t : int = vs_thd_dft,
@@ -748,8 +838,6 @@ def WAIFU_DML(
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if nr_lv not in [-1, 0, 1, 2, 3] :
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
-	if scale not in [1, 2, 3, 4] :
-		raise vs.Error(f"模块 {func_name} 的子参数 scale 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(gpu_t, int) or gpu_t <= 0 :
@@ -757,9 +845,24 @@ def WAIFU_DML(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "ort") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 ort")
+
+	plg_dir = os.path.dirname(core.ort.Version()["path"]).decode()
+	mdl_pname = {3:"upconv_7_anime_style_art_rgb/", 5:"upresnet10/", 6:"cunet/"}.get(model)
+	mdl_fname = ["scale2.0x_model", "noise0_scale2.0x_model", "noise1_scale2.0x_model", "noise2_scale2.0x_model", "noise3_scale2.0x_model"][[-1, 0, 1, 2, 3].index(nr_lv)]
+	mdl_pth = plg_dir + "/models/waifu2x/" + mdl_pname + mdl_fname + ".onnx"
+	if not os.path.exists(mdl_pth) :
+		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
+
 	global vsmlrt
 	if vsmlrt is None :
-		import vsmlrt
+		try :
+			import vsmlrt
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.15.25") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.15.25")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
@@ -770,8 +873,8 @@ def WAIFU_DML(
 	if (not lt_hd and (size_in > 1280 * 720)) or (size_in > 2048 * 1080) :
 		raise Exception("源分辨率超过限制的范围，已临时中止。")
 
-	cut1 = input.resize.Bilinear(format=vs.RGBS, matrix_in_s="709")
-	cut2 = vsmlrt.Waifu2x(clip=cut1, noise=nr_lv, scale=scale, model=model, backend=vsmlrt.BackendV2.ORT_DML(
+	cut1 = core.resize.Bilinear(clip=input, format=vs.RGBS, matrix_in_s="709")
+	cut2 = vsmlrt.Waifu2x(clip=cut1, noise=nr_lv, scale=2, model=model, backend=vsmlrt.BackendV2.ORT_DML(
 		device_id=gpu, num_streams=gpu_t, fp16=True))
 	output = core.resize.Bilinear(clip=cut2, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
 
@@ -786,7 +889,6 @@ def WAIFU_NV(
 	lt_hd : bool = False,
 	model : typing.Literal[3, 5, 6] = 3,
 	nr_lv : typing.Literal[-1, 0, 1, 2, 3] = 1,
-	scale : typing.Literal[1, 2, 3, 4] = 2,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : int = 2,
 	st_eng : bool = False,
@@ -803,8 +905,6 @@ def WAIFU_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if nr_lv not in [-1, 0, 1, 2, 3] :
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
-	if scale not in [1, 2, 3, 4] :
-		raise vs.Error(f"模块 {func_name} 的子参数 scale 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(gpu_t, int) or gpu_t <= 0 :
@@ -816,9 +916,24 @@ def WAIFU_NV(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "trt") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 trt")
+
+	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
+	mdl_pname = {3:"upconv_7_anime_style_art_rgb/", 5:"upresnet10/", 6:"cunet/"}.get(model)
+	mdl_fname = ["scale2.0x_model", "noise0_scale2.0x_model", "noise1_scale2.0x_model", "noise2_scale2.0x_model", "noise3_scale2.0x_model"][[-1, 0, 1, 2, 3].index(nr_lv)]
+	mdl_pth = plg_dir + "/models/waifu2x/" + mdl_pname + mdl_fname + ".onnx"
+	if not os.path.exists(mdl_pth) :
+		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
+
 	global vsmlrt
 	if vsmlrt is None :
-		import vsmlrt
+		try :
+			import vsmlrt
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.1") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.18.1")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
@@ -831,8 +946,8 @@ def WAIFU_NV(
 	if not st_eng and (((w_in > 2048) or (h_in > 1080)) or ((w_in < 64) or (h_in < 64))) :
 		raise Exception("源分辨率不属于动态引擎支持的范围，已临时中止。")
 
-	cut1 = input.resize.Bilinear(format=vs.RGBH, matrix_in_s="709")
-	cut2 = vsmlrt.Waifu2x(clip=cut1, noise=nr_lv, scale=scale, model=model, backend=vsmlrt.BackendV2.TRT(
+	cut1 = core.resize.Bilinear(clip=input, format=vs.RGBH, matrix_in_s="709")
+	cut2 = vsmlrt.Waifu2x(clip=cut1, noise=nr_lv, scale=2, model=model, backend=vsmlrt.BackendV2.TRT(
 		num_streams=gpu_t, force_fp16=True, output_format=1,
 		workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
 		use_cuda_graph=True, use_cublas=False, use_cudnn=False,
@@ -859,9 +974,9 @@ def MVT_LQ(
 	func_name = "MVT_LQ"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
-	if fps_out <= 0.0 or fps_out <= fps_in :
+	if not isinstance(fps_out, (int, float)) or fps_out <= 0.0 or fps_out <= fps_in :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_out 的值无效")
 	if not isinstance(recal, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 recal 的值无效")
@@ -870,14 +985,20 @@ def MVT_LQ(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "mv") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 mv")
+
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
 	blk_size = 32
 	w_tmp = math.ceil(w_in / blk_size) * blk_size - w_in
 	h_tmp = math.ceil(h_in / blk_size) * blk_size - h_in
+	if w_tmp + h_tmp > 0 :
+		cut0 = core.std.AddBorders(clip=input, right=w_tmp, bottom=h_tmp)
+	else :
+		cut0 = input
 
-	cut0 = core.std.AddBorders(clip=input, right=w_tmp, bottom=h_tmp)
-	cut1 = core.std.AssumeFPS(clip=cut0, fpsnum=int(fps_in * 1000), fpsden=1000)
+	cut1 = core.std.AssumeFPS(clip=cut0, fpsnum=int(fps_in * 1e6), fpsden=1e6)
 	cut_s = core.mv.Super(clip=cut1, pel=1, sharp=0)
 	cut_b = core.mv.Analyse(super=cut_s, blksize=blk_size, search=2, isb=True)
 	cut_f = core.mv.Analyse(super=cut_s, blksize=blk_size, search=2)
@@ -889,10 +1010,11 @@ def MVT_LQ(
 		cut_b, cut_f = cut_b, cut_f
 
 	if block :
-		fin = core.mv.BlockFPS(clip=cut1, super=cut_s, mvbw=cut_b, mvfw=cut_f, num=fps_out * 1000, den=1000)
+		output = core.mv.BlockFPS(clip=cut1, super=cut_s, mvbw=cut_b, mvfw=cut_f, num=fps_out * 1e6, den=1e6)
 	else :
-		fin = core.mv.FlowFPS(clip=cut1, super=cut_s, mvbw=cut_b, mvfw=cut_f, num=fps_out * 1000, den=1000, mask=1)
-	output = core.std.Crop(clip=fin, right=w_tmp, bottom=h_tmp)
+		output = core.mv.FlowFPS(clip=cut1, super=cut_s, mvbw=cut_b, mvfw=cut_f, num=fps_out * 1e6, den=1e6, mask=1)
+	if w_tmp + h_tmp > 0 :
+		output = core.std.Crop(clip=output, right=w_tmp, bottom=h_tmp)
 
 	return output
 
@@ -911,14 +1033,15 @@ def MVT_STD(
 	func_name = "MVT_STD"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
-	if fps_out <= 0.0 or fps_out <= fps_in :
+	if not isinstance(fps_out, (int, float)) or fps_out <= 0.0 or fps_out <= fps_in :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_out 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
-	core.num_threads = vs_t
+	if not hasattr(core, "mv") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 mv")
 
 	def _ffps(fps) :
 		rfps = int('%.0f' % fps)
@@ -927,18 +1050,26 @@ def MVT_STD(
 		else :
 			vfps, vden = rfps*1000, 1000
 		return vfps, vden
-
 	vfps, vden = _ffps(fps_in)
-	cut1 = core.std.AssumeFPS(input, fpsnum=int(vfps), fpsden=vden)
-	cut_s = core.mv.Super(clip=cut1, sharp=1, rfilter=4)
 
-	if vs_api >=4 :
-		cut_b = core.mv.Analyse(super=cut_s, blksize=64, searchparam=0, pelsearch=3, isb=True, lambda_=0, lsad=10000, overlapv=16, badrange=0, search_coarse=4)
-		cut_f = core.mv.Analyse(super=cut_s, blksize=64, searchparam=0, pelsearch=3, lambda_=0, lsad=10000, overlapv=16, badrange=0, search_coarse=4)
+	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+	blk_size = 80
+	w_tmp = math.ceil(w_in / blk_size) * blk_size - w_in
+	h_tmp = math.ceil(h_in / blk_size) * blk_size - h_in
+	if w_tmp + h_tmp > 0 :
+		cut0 = core.std.AddBorders(clip=input, right=w_tmp, bottom=h_tmp)
 	else :
-		cut_b = core.mv.Analyse(super=cut_s, blksize=64, searchparam=0, pelsearch=3, isb=True, _lambda=0, lsad=10000, overlapv=16, badrange=0, search_coarse=4)
-		cut_f = core.mv.Analyse(super=cut_s, blksize=64, searchparam=0, pelsearch=3, _lambda=0, lsad=10000, overlapv=16, badrange=0, search_coarse=4)
+		cut0 = input
+
+	cut1 = core.std.AssumeFPS(clip=cut0, fpsnum=int(vfps), fpsden=vden)
+	cut_s = core.mv.Super(clip=cut1, sharp=1, rfilter=4)
+	cut_b = core.mv.Analyse(super=cut_s, blksize=64, searchparam=0, pelsearch=3, isb=True, lambda_=0, lsad=10000, overlapv=16, badrange=0, search_coarse=4)
+	cut_f = core.mv.Analyse(super=cut_s, blksize=64, searchparam=0, pelsearch=3, lambda_=0, lsad=10000, overlapv=16, badrange=0, search_coarse=4)
+
 	output = core.mv.BlockFPS(clip=cut1, super=cut_s, mvbw=cut_b, mvfw=cut_f, num=fps_out * 1000, den=vden, mode=2, thscd1=970, thscd2=255, blend=False)
+	if w_tmp + h_tmp > 0 :
+		output = core.std.Crop(clip=output, right=w_tmp, bottom=h_tmp)
 
 	return output
 
@@ -956,12 +1087,15 @@ def MVT_POT(
 	func_name = "MVT_POT"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
-	if fps_out <= 0.0 or fps_out <= fps_in :
+	if not isinstance(fps_out, (int, float)) or fps_out <= 0.0 or fps_out <= fps_in :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_out 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "mv") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 mv")
 
 	core.num_threads = vs_t
 	max_flow_width  = 1280
@@ -1009,9 +1143,9 @@ def MVT_MQ(
 	func_name = "MVT_MQ"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
-	if fps_out <= 0.0 or fps_out <= fps_in :
+	if not isinstance(fps_out, (int, float)) or fps_out <= 0.0 or fps_out <= fps_in :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_out 的值无效")
 	if qty_lv not in [1, 2, 3] :
 		raise vs.Error(f"模块 {func_name} 的子参数 qty_lv 的值无效")
@@ -1025,6 +1159,9 @@ def MVT_MQ(
 		raise vs.Error(f"模块 {func_name} 的子参数 thscd2 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "mv") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 mv")
 
 	core.num_threads = vs_t
 	blksizev = blksize
@@ -1053,12 +1190,13 @@ def MVT_MQ(
 
 def RIFE_STD(
 	input : vs.VideoNode,
-	model : typing.Literal[9, 21, 24] = 9,
+	model : typing.Literal[21, 37, 39] = 21,
+	t_tta : bool = False,
+	fps_num : int = 2,
+	fps_den : int = 1,
 	sc_mode : typing.Literal[0, 1, 2] = 1,
 	skip : bool = True,
 	stat_th : float = 60.0,
-	fps_num : int = 2,
-	fps_den : int = 1,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : int = 2,
 	vs_t : int = vs_thd_dft,
@@ -1067,24 +1205,38 @@ def RIFE_STD(
 	func_name = "RIFE_STD"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if model not in [9, 21, 24] :
+	if model not in [21, 37, 39] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
+	if not isinstance(t_tta, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 t_tta 的值无效")
+	if not isinstance(fps_num, int) or fps_num < 2 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_num 的值无效")
+	if not isinstance(fps_den, int) or fps_den >= fps_num or fps_num/fps_den <= 1 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_den 的值无效")
 	if sc_mode not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 sc_mode 的值无效")
 	if not isinstance(skip, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 skip 的值无效")
-	if stat_th <= 0.0 :
-		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
-	if not isinstance(fps_num, int) or fps_num <= 1 :
-		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if not isinstance(fps_den, int) or fps_den >= fps_num :
-		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(stat_th, (int, float)) or stat_th <= 0.0 or stat_th > 60.0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 stat_th 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(gpu_t, int) or gpu_t <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "rife") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 rife")
+	if skip :
+		if not hasattr(core, "vmaf") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 vmaf")
+	if sc_mode == 1 :
+		if not hasattr(core, "misc") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 misc")
+	elif sc_mode == 2 :
+		if not hasattr(core, "mv") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 mv")
 
 	core.num_threads = vs_t
 	fmt_in = input.format.id
@@ -1100,7 +1252,7 @@ def RIFE_STD(
 		cut0 = core.mv.SCDetection(clip=input, vectors=vec, thscd1=240, thscd2=130)
 
 	cut1 = core.resize.Bilinear(clip=cut0, format=vs.RGBS, matrix_in_s="709")
-	cut2 = core.rife.RIFE(clip=cut1, model=model, factor_num=fps_num, factor_den=fps_den, gpu_id=gpu, gpu_thread=gpu_t, sc=True if sc_mode else False, skip=skip, skip_threshold=stat_th)
+	cut2 = core.rife.RIFE(clip=cut1, model=(model+1) if t_tta else model, factor_num=fps_num, factor_den=fps_den, gpu_id=gpu, gpu_thread=gpu_t, sc=True if sc_mode else False, skip=skip, skip_threshold=stat_th)
 	output = core.resize.Bilinear(clip=cut2, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
 
 	return output
@@ -1112,11 +1264,13 @@ def RIFE_STD(
 def RIFE_NV(
 	input : vs.VideoNode,
 	lt_d2k : bool = False,
-	model : typing.Literal[40, 46, 48] = 40,
-	sc_mode : typing.Literal[0, 1, 2] = 1,
-	fps_num : typing.Literal[2, 3, 4] = 2,
-	t_tta : bool = False,
+	model : typing.Literal[46, 413, 4131] = 46,
 	ext_proc : bool = True,
+	t_tta : bool = False,
+	fps_in : float = 23.976,
+	fps_num : int = 2,
+	fps_den : int = 1,
+	sc_mode : typing.Literal[0, 1, 2] = 1,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : int = 2,
 	st_eng : bool = False,
@@ -1129,16 +1283,20 @@ def RIFE_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(lt_d2k, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 lt_d2k 的值无效")
-	if model not in [40, 46, 48] :
+	if model not in [46, 413, 4131] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
-	if sc_mode not in [0, 1, 2] :
-		raise vs.Error(f"模块 {func_name} 的子参数 sc_mode 的值无效")
-	if fps_num not in [2, 3, 4] :
-		raise vs.Error(f"模块 {func_name} 的子参数 fps_num 的值无效")
-	if not isinstance(t_tta, bool) :
-		raise vs.Error(f"模块 {func_name} 的子参数 t_tta 的值无效")
 	if not isinstance(ext_proc, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 ext_proc 的值无效")
+	if not isinstance(t_tta, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 t_tta 的值无效")
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
+	if not isinstance(fps_num, int) or fps_num < 2 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_num 的值无效")
+	if not isinstance(fps_den, int) or fps_den >= fps_num or fps_num/fps_den <= 1 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_den 的值无效")
+	if sc_mode not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 sc_mode 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(gpu_t, int) or gpu_t <= 0 :
@@ -1150,19 +1308,47 @@ def RIFE_NV(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "trt") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 trt")
+	if sc_mode == 1 :
+		if not hasattr(core, "misc") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 misc")
+	elif sc_mode == 2 :
+		if not hasattr(core, "mv") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 mv")
+	if not (fps_num/fps_den).is_integer() :
+		if not hasattr(core, "akarin") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 akarin")
+
+	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
+	mdl_pname = "rife/" if ext_proc else "rife_v2/"
+	if t_tta :
+		mdl_fname = ["rife_v4.6_ensemble", "rife_v4.13_ensemble", "rife_v4.13_lite_ensemble"][[46, 413, 4131].index(model)]
+	else :
+		mdl_fname = ["rife_v4.6", "rife_v4.13", "rife_v4.13_lite"][[46, 413, 4131].index(model)]
+	mdl_pth = plg_dir + "/models/" + mdl_pname + mdl_fname + ".onnx"
+	if not os.path.exists(mdl_pth) :
+		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
+
 	global vsmlrt
 	if vsmlrt is None :
-		import vsmlrt
+		try :
+			import vsmlrt
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.19") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.18.19")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
 	size_in = w_in * h_in
 	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
 	fmt_in = input.format.id
+	fps_factor = fps_num/fps_den
 
-	if not ext_proc :
+	if not ext_proc and model >= 47 : # https://github.com/AmusementClub/vs-mlrt/issues/72
 		st_eng = True
-	if (not lt_d2k and (size_in > 2048 * 1088)) or (size_in  > 4096 * 2176) :
+	if (not lt_d2k and (size_in > 2048 * 1088)) or (size_in > 4096 * 2176) :
 		raise Exception("源分辨率超过限制的范围，已临时中止。")
 	if not st_eng and (((w_in > 4096) or (h_in > 2176)) or ((w_in < 289) or (h_in < 225))) :
 		raise Exception("源分辨率不属于动态引擎支持的范围，已临时中止。")
@@ -1170,13 +1356,10 @@ def RIFE_NV(
 	scale_model = 1
 	if lt_d2k and st_eng and (size_in > 2048 * 1088) :
 		scale_model = 0.5
-		if not ext_proc :
+		if not ext_proc : # https://github.com/AmusementClub/vs-mlrt/blob/57cfe194fa8c21d221bdfaffebe4fee1af43d40c/scripts/vsmlrt.py#L903
 			scale_model = 1
-
-	if model >=47 : # https://github.com/AmusementClub/vs-mlrt/blob/6c71b9546b1151542795f458968af562436d1065/scripts/vsmlrt.py#L875
-		t_tta = False
-		scale_model = 1.0
-		ext_proc = True
+	if model >= 47 : # https://github.com/AmusementClub/vs-mlrt/blob/57cfe194fa8c21d221bdfaffebe4fee1af43d40c/scripts/vsmlrt.py#L895
+		scale_model = 1
 
 	tile_size = 32 / scale_model
 	w_tmp = math.ceil(w_in / tile_size) * tile_size - w_in
@@ -1191,89 +1374,30 @@ def RIFE_NV(
 		vec = core.mv.Analyse(super=sup, isb=True)
 		cut0 = core.mv.SCDetection(clip=input, vectors=vec, thscd1=240, thscd2=130)
 
-	cut1 = core.resize.Bilinear(clip=cut0, format=vs.RGBH if ext_proc else vs.RGBS, matrix_in_s="709")
-	if ext_proc : # https://github.com/AmusementClub/vs-mlrt/blob/6c71b9546b1151542795f458968af562436d1065/scripts/vsmlrt.py#L883
-		cut1 = core.std.AddBorders(clip=cut1, right=w_tmp, bottom=h_tmp)
-		fin = vsmlrt.RIFE(clip=cut1, multi=fps_num, scale=scale_model, model=model, ensemble=t_tta, _implementation=1, backend=vsmlrt.BackendV2.TRT(
+	cut1 = core.resize.Bilinear(clip=cut0, format=vs.RGBH, matrix_in_s="709")
+	if ext_proc :
+		if w_tmp + h_tmp > 0 :
+			cut1 = core.std.AddBorders(clip=cut1, right=w_tmp, bottom=h_tmp)
+		fin = vsmlrt.RIFE(clip=cut1, multi=fractions.Fraction(fps_num, fps_den), scale=scale_model, model=model, ensemble=t_tta, _implementation=1, video_player=True, backend=vsmlrt.BackendV2.TRT(
 			num_streams=gpu_t, force_fp16=True, output_format=1,
 			workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
 			use_cuda_graph=True, use_cublas=False, use_cudnn=False,
 			static_shape=st_eng, min_shapes=[0, 0] if st_eng else [320, 256],
 			opt_shapes=None if st_eng else [1920, 1088], max_shapes=None if st_eng else ([4096, 2176] if lt_d2k else [2048, 1088]),
 			device_id=gpu, short_path=True))
-		fin = core.std.Crop(clip=fin, right=w_tmp, bottom=h_tmp)
+		if w_tmp + h_tmp > 0 :
+			fin = core.std.Crop(clip=fin, right=w_tmp, bottom=h_tmp)
 	else :
-		fin = vsmlrt.RIFE(clip=cut1, multi=fps_num, scale=scale_model, model=model, ensemble=t_tta, _implementation=2, backend=vsmlrt.BackendV2.TRT(
-			num_streams=gpu_t, fp16=False, force_fp16=False, tf32=True, output_format=0,
+		fin = vsmlrt.RIFE(clip=cut1, multi=fractions.Fraction(fps_num, fps_den), scale=scale_model, model=model, ensemble=t_tta, _implementation=2, video_player=True, backend=vsmlrt.BackendV2.TRT(
+			num_streams=gpu_t, force_fp16=True, output_format=1,
 			workspace=None if ws_size < 128 else ws_size,
 			use_cuda_graph=True, use_cublas=False, use_cudnn=False,
 			static_shape=st_eng, min_shapes=[0, 0],
 			opt_shapes=None, max_shapes=None,
 			device_id=gpu, short_path=True))
 	output = core.resize.Bilinear(clip=fin, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
-
-	return output
-
-##################################################
-## RIFE补帧
-##################################################
-
-def RIFE_NV_ORT(
-	input : vs.VideoNode,
-	sc_mode : typing.Literal[0, 1, 2] = 1,
-	fps_num : typing.Literal[2, 3, 4] = 2,
-	cudnn : bool = False,
-	ext_proc : bool = False,
-	gpu : typing.Literal[0, 1, 2] = 0,
-	gpu_t : int = 2,
-	vs_t : int = vs_thd_dft,
-) -> vs.VideoNode :
-
-	func_name = "RIFE_NV_ORT"
-	if not isinstance(input, vs.VideoNode) :
-		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if sc_mode not in [0, 1, 2] :
-		raise vs.Error(f"模块 {func_name} 的子参数 sc_mode 的值无效")
-	if fps_num not in [2, 3, 4] :
-		raise vs.Error(f"模块 {func_name} 的子参数 fps_num 的值无效")
-	if not isinstance(cudnn, bool) :
-		raise vs.Error(f"模块 {func_name} 的子参数 cudnn 的值无效")
-	if not isinstance(ext_proc, bool) :
-		raise vs.Error(f"模块 {func_name} 的子参数 ext_proc 的值无效")
-	if gpu not in [0, 1, 2] :
-		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
-		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
-
-	global vsmlrt
-	if vsmlrt is None :
-		import vsmlrt
-
-	core.num_threads = vs_t
-	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
-	fmt_in = input.format.id
-	w_p = (input.width  + 31) // 32 * 32 - input.width
-	h_p = (input.height + 31) // 32 * 32 - input.height
-
-	if sc_mode == 0 :
-		cut0 = input
-	elif sc_mode == 1 :
-		cut0 = core.misc.SCDetect(clip=input, threshold=0.15)
-	elif sc_mode == 2 :
-		sup = core.mv.Super(clip=input, pel=1)
-		vec = core.mv.Analyse(super=sup, isb=True)
-		cut0 = core.mv.SCDetection(clip=input, vectors=vec, thscd1=240, thscd2=130)
-
-	be = vsmlrt.BackendV2.ORT_CUDA(fp16=True, num_streams=gpu_t, cudnn_benchmark=cudnn, device_id=gpu)
-
-	if ext_proc :
-		pad = cut0.std.AddBorders(right=w_p, bottom=h_p).resize.Bilinear(format=vs.RGBS, matrix_in_s="709")
-		memc = vsmlrt.RIFE(pad, multi=fps_num, model=46, _implementation=1, backend=be)
-		output = memc.resize.Bilinear(format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None).std.Crop(right=w_p, bottom=h_p)
-	else :
-		cut1 = core.resize.Bilinear(clip=cut0, format=vs.RGBS, matrix_in_s="709")
-		memc =vsmlrt.RIFE(cut1, multi=fps_num, model=46, _implementation=2, backend=be)
-		output = core.resize.Bilinear(clip=memc, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+	if not fps_factor.is_integer() :
+		output = core.std.AssumeFPS(clip=output, fpsnum=fps_in * fps_num * 1e6, fpsden=fps_den * 1e6)
 
 	return output
 
@@ -1293,7 +1417,7 @@ def SVP_LQ(
 	func_name = "SVP_LQ"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
 	if fps_num not in [2, 3, 4] :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_num 的值无效")
@@ -1303,6 +1427,9 @@ def SVP_LQ(
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "svp1") or not hasattr(core, "svp2") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 svp1 svp2")
 
 	core.num_threads = vs_t
 	fps_num = fps_num
@@ -1316,10 +1443,10 @@ def SVP_LQ(
 	if clip.format.id == vs.YUV420P8 :
 		clip8 = clip
 	elif clip.format.id == vs.YUV420P10 :
-		clip8 = clip.resize.Bilinear(format=vs.YUV420P8)
+		clip8 = core.resize.Bilinear(clip=clip, format=vs.YUV420P8)
 	else :
-		clip = clip.resize.Bilinear(format=vs.YUV420P10, dither_type="random")
-		clip8 = clip.resize.Bilinear(format=vs.YUV420P8)
+		clip = core.resize.Bilinear(clip=clip, format=vs.YUV420P10, dither_type="random")
+		clip8 = core.resize.Bilinear(clip=clip, format=vs.YUV420P8)
 
 	svps = core.svp1.Super(clip8, super_param)
 	svpv = core.svp1.Analyse(svps["clip"], svps["data"], clip if acc else clip8, analyse_param)
@@ -1343,9 +1470,9 @@ def SVP_STD(
 	func_name = "SVP_STD"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
-	if fps_out <= 0.0 or fps_out <= fps_in :
+	if not isinstance(fps_out, (int, float)) or fps_out <= 0.0 or fps_out <= fps_in :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_out 的值无效")
 	if cpu not in [0, 1] :
 		raise vs.Error(f"模块 {func_name} 的子参数 cpu 的值无效")
@@ -1353,6 +1480,9 @@ def SVP_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "svp1") or not hasattr(core, "svp2") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 svp1 svp2")
 
 	core.num_threads = vs_t
 	fmt_in = input.format.id
@@ -1371,6 +1501,76 @@ def SVP_STD(
 	vectors = core.svp1.Analyse(super["clip"], super["data"], input if acc else clip_f, analyse_params)
 	smooth = core.svp2.SmoothFps(input if acc else clip_f, super["clip"], super["data"], vectors["clip"], vectors["data"], smoothfps_params, src=input if acc else clip_f, fps=fps_in)
 	output = core.std.AssumeFPS(smooth, fpsnum=smooth.fps_num, fpsden=smooth.fps_den)
+
+	return output
+
+##################################################
+## PORT https://github.com/natural-harmonia-gropius
+## SVP补帧
+##################################################
+
+def SVP_HQ(
+	input : vs.VideoNode,
+	fps_in : float = 23.976,
+	fps_dp : float = 59.940,
+	cpu : typing.Literal[0, 1] = 0,
+	gpu : typing.Literal[0, 11, 12, 21] = 0,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "SVP_HQ"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
+	if not isinstance(fps_dp, (int, float)) or fps_dp < 23.976 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_dp 的值无效")
+	if cpu not in [0, 1] :
+		raise vs.Error(f"模块 {func_name} 的子参数 cpu 的值无效")
+	if gpu not in [0, 11, 12, 21] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "svp1") or not hasattr(core, "svp2") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 svp1 svp2")
+
+	core.num_threads = vs_t
+	fps = fps_in or 23.976
+	freq = fps_dp or 59.970
+	acc = 1 if cpu == 0 else 0
+	overlap = 2 if cpu == 0 else 3
+	w, h = input.width, input.height
+
+	if (freq - fps < 2) :
+		raise Exception("Interpolation is not necessary.")
+
+	target_fps = 60
+
+	sp = "{gpu:%d}" % (acc)
+	ap = "{block:{w:32,h:16,overlap:%d},main:{levels:5,search:{type:4,distance:-12,coarse:{type:4,distance:-1,trymany:true,bad:{range:0}}},penalty:{lambda:3.33,plevel:1.33,lsad:3300,pzero:110,pnbour:50}},refine:[{thsad:400},{thsad:200,search:{type:4,distance:-4}}]}" % (overlap)
+	fp = "{gpuid:%d,algo:23,rate:{num:%d,den:%d,abs:true},mask:{cover:80,area:30,area_sharp:0.75},scene:{mode:0,limits:{scene:6000,zero:100,blocks:40}}}" % (gpu, round(min(max(target_fps, fps * 2, freq / 2), freq)) * 1000, 1001)
+
+	def _toYUV420(clip) :
+		if clip.format.id == vs.YUV420P8 :
+			clip8 = clip
+		elif clip.format.id == vs.YUV420P10 :
+			clip8 = core.resize.Bilinear(clip=clip, format=vs.YUV420P8)
+		else :
+			clip = core.resize.Bilinear(clip=clip, format=vs.YUV420P10)
+			clip8 = core.resize.Bilinear(clip=clip, format=vs.YUV420P8)
+		return clip, clip8
+
+	def _svpflow(clip, fps, sp, ap, fp) :
+		clip, clip8 = _toYUV420(clip)
+		s = core.svp1.Super(clip8, sp)
+		r = s["clip"], s["data"]
+		v = core.svp1.Analyse(*r, clip, ap)
+		r = *r, v["clip"], v["data"]
+		clip = core.svp2.SmoothFps(clip if acc else clip8, *r, fp, src=clip, fps=fps)
+		return clip
+
+	output = _svpflow(input, fps, sp, ap, fp)
 
 	return output
 
@@ -1394,7 +1594,7 @@ def SVP_PRO(
 	func_name = "SVP_PRO"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
 	if not (isinstance(fps_num, int) and fps_num > 1) :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_num 的值无效")
@@ -1402,18 +1602,21 @@ def SVP_PRO(
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_den 的值无效")
 	if not isinstance(abs, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 abs 的值无效")
-		if abs and (fps_num / fps_den <= fps_in) :
-			raise vs.Error(f"模块 {func_name} 的子参数 fps_num 或 fps_den 的值无效")
+	if abs and (fps_num / fps_den <= fps_in) :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_num 或 fps_den 的值无效")
 	if cpu not in [0, 1] :
 		raise vs.Error(f"模块 {func_name} 的子参数 cpu 的值无效")
 	if not isinstance(nvof, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 nvof 的值无效")
-		if nvof and cpu :
-			raise vs.Error(f"模块 {func_name} 的子参数 cpu 的值无效")
+	if nvof and cpu :
+		raise vs.Error(f"模块 {func_name} 的子参数 cpu 的值无效")
 	if gpu not in [0, 11, 12, 21] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "svp1") or not hasattr(core, "svp2") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 svp1 svp2")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
@@ -1431,10 +1634,10 @@ def SVP_PRO(
 	if clip.format.id == vs.YUV420P8 :
 		clip8 = clip
 	elif clip.format.id == vs.YUV420P10 :
-		clip8 = clip.resize.Bilinear(format=vs.YUV420P8)
+		clip8 = core.resize.Bilinear(clip=clip, format=vs.YUV420P8)
 	else :
-		clip = clip.resize.Bilinear(format=vs.YUV420P10)
-		clip8 = clip.resize.Bilinear(format=vs.YUV420P8)
+		clip = core.resize.Bilinear(clip=clip, format=vs.YUV420P10)
+		clip8 = core.resize.Bilinear(clip=clip, format=vs.YUV420P8)
 
 	if nvof :
 		output  = core.svp2.SmoothFps_NVOF(clip, smooth_nvof_param, nvof_src=clip8, src=clip,fps=fps_in)
@@ -1442,73 +1645,6 @@ def SVP_PRO(
 		super = core.svp1.Super(clip8, super_param)
 		vectors = core.svp1.Analyse(super["clip"], super["data"], clip if acc else clip8, analyse_param)
 		output = core.svp2.SmoothFps(clip if acc else clip8, super["clip"], super["data"], vectors["clip"], vectors["data"], smooth_param, src=clip if acc else clip8, fps=fps_in)
-
-	return output
-
-##################################################
-## PORT https://github.com/natural-harmonia-gropius
-## SVP补帧
-##################################################
-
-def SVP_HQ(
-	input : vs.VideoNode,
-	fps_in : float = 23.976,
-	fps_dp : float = 59.940,
-	cpu : typing.Literal[0, 1] = 0,
-	gpu : typing.Literal[0, 11, 12, 21] = 0,
-	vs_t : int = vs_thd_dft,
-) -> vs.VideoNode :
-
-	func_name = "SVP_HQ"
-	if not isinstance(input, vs.VideoNode) :
-		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
-		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
-	if fps_dp < 23.976 :
-		raise vs.Error(f"模块 {func_name} 的子参数 fps_dp 的值无效")
-	if cpu not in [0, 1] :
-		raise vs.Error(f"模块 {func_name} 的子参数 cpu 的值无效")
-	if gpu not in [0, 11, 12, 21] :
-		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
-	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
-		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
-
-	core.num_threads = vs_t
-	fps = fps_in or 23.976
-	freq = fps_dp or 59.970
-	acc = 1 if cpu == 0 else 0
-	overlap = 2 if cpu == 0 else 3
-	w, h = input.width, input.height
-
-	if (freq - fps < 2) :
-		raise Exception("Interpolation is not necessary.")
-
-	target_fps = 60
-
-	sp = "{gpu:%d}" % (acc)
-	ap = "{block:{w:32,h:16,overlap:%d},main:{levels:5,search:{type:4,distance:-12,coarse:{type:4,distance:-1,trymany:true,bad:{range:0}}},penalty:{lambda:3.33,plevel:1.33,lsad:3300,pzero:110,pnbour:50}},refine:[{thsad:400},{thsad:200,search:{type:4,distance:-4}}]}" % (overlap)
-	fp = "{gpuid:%d,algo:23,rate:{num:%d,den:%d,abs:true},mask:{cover:80,area:30,area_sharp:0.75},scene:{mode:0,limits:{scene:6000,zero:100,blocks:40}}}" % (gpu, round(min(max(target_fps, fps * 2, freq / 2), freq)) * 1000, 1001)
-
-	def _toYUV420(clip) :
-		if clip.format.id == vs.YUV420P8 :
-			clip8 = clip
-		elif clip.format.id == vs.YUV420P10 :
-			clip8 = clip.resize.Bilinear(format=vs.YUV420P8)
-		else :
-			clip = clip.resize.Bilinear(format=vs.YUV420P10)
-			clip8 = clip.resize.Bilinear(format=vs.YUV420P8)
-		return clip, clip8
-
-	def _svpflow(clip, fps, sp, ap, fp) :
-		clip, clip8 = _toYUV420(clip)
-		s = core.svp1.Super(clip8, sp)
-		r = s["clip"], s["data"]
-		v = core.svp1.Analyse(*r, clip, ap)
-		r = *r, v["clip"], v["data"]
-		clip = core.svp2.SmoothFps(clip if acc else clip8, *r, fp, src=clip, fps=fps)
-		return clip
-
-	output = _svpflow(input, fps, sp, ap, fp)
 
 	return output
 
@@ -1538,6 +1674,9 @@ def BILA_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "bilateralgpu_rtc") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 bilateralgpu_rtc")
 
 	core.num_threads = vs_t
 	fmt_in = input.format.id
@@ -1578,6 +1717,9 @@ def BM3D_NV(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "bm3dcuda_rtc") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 bm3dcuda_rtc")
+
 	core.num_threads = vs_t
 	fmt_in = input.format.id
 
@@ -1602,10 +1744,13 @@ def CCD_STD(
 	func_name = "CCD_STD"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if nr_lv <= 0.0 :
+	if not isinstance(nr_lv, (int, float)) or nr_lv <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "akarin") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 akarin")
 
 	core.num_threads = vs_t
 	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
@@ -1674,7 +1819,7 @@ def DFTT_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if plane not in ([0], [1], [2], [0, 1], [0, 2], [1, 2], [0, 1, 2]) :
 		raise vs.Error(f"模块 {func_name} 的子参数 plane 的值无效")
-	if nr_lv <= 0 :
+	if not isinstance(nr_lv, (int, float)) or nr_lv <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
 	if not isinstance(size_sb, int) or size_sb <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 size_sb 的值无效")
@@ -1685,12 +1830,20 @@ def DFTT_STD(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
-	core.num_threads = vs_t
-	fmt_in = input.format.id
+	if not hasattr(core, "dfttest2_cpu") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 dfttest2_cpu")
 
 	global dfttest2
 	if dfttest2 is None :
-		import dfttest2
+		try :
+			import dfttest2
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 dfttest2")
+	if LooseVersion(dfttest2.__version__) < LooseVersion("0.3.3") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 dfttest2 的版本号过低，至少 0.3.3")
+
+	core.num_threads = vs_t
+	fmt_in = input.format.id
 
 	if fmt_in == vs.YUV444P16 :
 		cut0 = input
@@ -1722,7 +1875,7 @@ def DFTT_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if plane not in ([0], [1], [2], [0, 1], [0, 2], [1, 2], [0, 1, 2]) :
 		raise vs.Error(f"模块 {func_name} 的子参数 plane 的值无效")
-	if nr_lv <= 0 :
+	if not isinstance(nr_lv, (int, float)) or nr_lv <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
 	if not isinstance(size_sb, int) or size_sb <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 size_sb 的值无效")
@@ -1737,12 +1890,20 @@ def DFTT_NV(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "dfttest2_nvrtc") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 dfttest2_nvrtc")
+
 	core.num_threads = vs_t
 	fmt_in = input.format.id
 
 	global dfttest2
 	if dfttest2 is None :
-		import dfttest2
+		try :
+			import dfttest2
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 dfttest2")
+	if LooseVersion(dfttest2.__version__) < LooseVersion("0.3.3") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 dfttest2 的版本号过低，至少 0.3.3")
 
 	if fmt_in == vs.YUV444P16 :
 		cut0 = input
@@ -1750,6 +1911,110 @@ def DFTT_NV(
 		cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P16)
 	cut1 = dfttest2.DFTTest2(clip=cut0, planes=plane, sigma=nr_lv, sbsize=size_sb, sosize=size_so, tbsize=size_tb, backend=dfttest2.Backend.NVRTC(device_id=gpu, num_streams=gpu_t))
 	output = core.resize.Bilinear(clip=cut1, format=fmt_in)
+
+	return output
+
+##################################################
+## DPIR降噪
+##################################################
+
+def DPIR_NR_NV(
+	input : vs.VideoNode,
+	lt_hd : bool = False,
+	model : typing.Literal[0, 1] = 0,
+	nr_lv : float = 5.0,
+	gpu : typing.Literal[0, 1, 2] = 0,
+	gpu_t : int = 2,
+	st_eng : bool = False,
+	ws_size : int = 0,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "DPIR_NR_NV"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(lt_hd, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
+	if model not in [0, 1] :
+		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
+	if not isinstance(nr_lv, (int, float)) or nr_lv <= 0.0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
+	if gpu not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
+	if not isinstance(st_eng, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 st_eng 的值无效")
+	if not isinstance(ws_size, int) or ws_size < 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 ws_size 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "trt") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 trt")
+
+	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
+	mdl_fname = ["drunet_gray", "drunet_color"][[0, 1].index(model)]
+	mdl_pth = plg_dir + "/models/dpir/" + mdl_fname + ".onnx"
+	if not os.path.exists(mdl_pth) :
+		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
+
+	global vsmlrt
+	if vsmlrt is None :
+		try :
+			import vsmlrt
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.1") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.18.1")
+
+	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+	size_in = w_in * h_in
+	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+	fmt_src = input.format
+	fmt_in = fmt_src.id
+	fmt_bit_in = fmt_src.bits_per_sample
+	fmt_cf_in = fmt_src.color_family
+
+	if (not lt_hd and (size_in > 1280 * 720)) or (size_in > 2048 * 1080) :
+		raise Exception("源分辨率超过限制的范围，已临时中止。")
+	if not st_eng and (((w_in > 2048) or (h_in > 1080)) or ((w_in < 64) or (h_in < 64))) :
+		raise Exception("源分辨率不属于动态引擎支持的范围，已临时中止。")
+
+	tile_size = 8
+	w_tmp = math.ceil(w_in / tile_size) * tile_size - w_in
+	h_tmp = math.ceil(h_in / tile_size) * tile_size - h_in
+	if w_tmp + h_tmp > 0 :
+		cut0 = core.std.AddBorders(clip=input, right=w_tmp, bottom=h_tmp)
+	else :
+		cut0 = input
+
+	if model == 0 :
+#		cut1 = core.resize.Bilinear(clip=cut0, format=vs.GRAYH, matrix_in_s="709")
+#		cut2 = core.std.ShufflePlanes(clips=cut1, planes=0, colorfamily=vs.GRAY)
+		cut1 = core.std.ShufflePlanes(clips=cut0, planes=0, colorfamily=vs.GRAY)
+		cut2 = core.resize.Bilinear(clip=cut1, format=vs.GRAYH, matrix_in_s="709")
+	else :
+		cut2 = core.resize.Bilinear(clip=cut0, format=vs.RGBH, matrix_in_s="709")
+
+	fin = vsmlrt.DPIR(clip=cut2, strength=nr_lv, model=model, backend=vsmlrt.BackendV2.TRT(
+		num_streams=gpu_t, force_fp16=True, output_format=1,
+		workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
+		use_cuda_graph=True, use_cublas=False, use_cudnn=False,
+		static_shape=st_eng, min_shapes=[0, 0] if st_eng else [64, 64],
+		opt_shapes=None if st_eng else ([1920, 1080] if lt_hd else [1280, 720]), max_shapes=None if st_eng else ([2048, 1080] if lt_hd else [1280, 720]),
+		device_id=gpu, short_path=True))
+
+	if model == 0 :
+		pre_mg = core.resize.Bilinear(clip=fin, format=fin.format.replace(bits_per_sample=fmt_bit_in, sample_type=0))
+#		pre_mg = core.resize.Bilinear(clip=fin, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+		output = core.std.ShufflePlanes(clips=[pre_mg, cut0, cut0], planes=[0, 1, 2], colorfamily=fmt_cf_in)
+	else :
+		output = core.resize.Bilinear(clip=fin, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+
+	if w_tmp + h_tmp > 0 :
+		output = core.std.Crop(clip=output, right=w_tmp, bottom=h_tmp)
 
 	return output
 
@@ -1772,7 +2037,7 @@ def FFT3D_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if mode not in [1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 mode 的值无效")
-	if nr_lv <= 0.0 :
+	if not isinstance(nr_lv, (int, float)) or nr_lv <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
 	if plane not in ([0], [1], [2], [0, 1], [0, 2], [1, 2], [0, 1, 2]) :
 		raise vs.Error(f"模块 {func_name} 的子参数 plane 的值无效")
@@ -1782,6 +2047,15 @@ def FFT3D_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 cpu_t 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "trt") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 trt")
+	if mode == 1 :
+		if not hasattr(core, "fft3dfilter") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 fft3dfilter")
+	elif mode == 2 :
+		if not hasattr(core, "neo_fft3d") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 neo_fft3d")
 
 	core.num_threads = vs_t
 
@@ -1821,12 +2095,22 @@ def NLM_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 rad_sw 的值无效")
 	if not isinstance(rad_snw, int) or rad_snw < 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 rad_snw 的值无效")
-	if nr_lv <= 0.0 :
+	if not isinstance(nr_lv, (int, float)) or nr_lv <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if blur_m == 1 :
+		if not hasattr(core, "rgvs") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 rgvs")
+	if nlm_m == 1 :
+		if not hasattr(core, "knlm") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 knlm")
+	elif nlm_m == 2 :
+		if not hasattr(core, "nlm_ispc") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 nlm_ispc")
 
 	core.num_threads = vs_t
 	fmt_in = input.format.id
@@ -1878,7 +2162,7 @@ def NLM_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 rad_sw 的值无效")
 	if not isinstance(rad_snw, int) or rad_snw < 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 rad_snw 的值无效")
-	if nr_lv <= 0.0 :
+	if not isinstance(nr_lv, (int, float)) or nr_lv <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
@@ -1886,6 +2170,12 @@ def NLM_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "nlm_cuda") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 nlm_cuda")
+	if blur_m == 1 :
+		if not hasattr(core, "rgvs") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 rgvs")
 
 	core.num_threads = vs_t
 	fmt_in = input.format.id
@@ -1920,6 +2210,9 @@ def COLOR_P3W_FIX(
 		raise vs.Error(f"模块 {func_name} 的子参数 linear 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "fmtc") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 fmtc")
 
 	core.num_threads = vs_t
 	colorlv = input.get_frame(0).props._ColorRange
@@ -2058,6 +2351,9 @@ def DEBAND_STD(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "neo_f3kdb") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 neo_f3kdb")
+
 	core.num_threads = vs_t
 	fmt_in = fmt_in = input.format.id
 	color_lv = getattr(input.get_frame(0).props, "_ColorRange", 0)
@@ -2090,6 +2386,9 @@ def DEINT_LQ(
 		raise vs.Error(f"模块 {func_name} 的子参数 tff 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "bwdif") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 bwdif")
 
 	core.num_threads = vs_t
 
@@ -2126,6 +2425,25 @@ def DEINT_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 deint_m 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if ref_m == 1 :
+		if not hasattr(core, "znedi3") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 znedi3")
+	elif ref_m == 2 :
+		if not hasattr(core, "nnedi3cl") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 nnedi3cl")
+	elif ref_m == 3 :
+		if not hasattr(core, "eedi3m") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 eedi3m")
+	if deint_m == 1 :
+		if not hasattr(core, "bwdif") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 bwdif")
+	elif deint_m == 2 :
+		if not hasattr(core, "yadifmod") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 yadifmod")
+	elif deint_m == 3 :
+		if not hasattr(core, "tdm") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 tdm")
 
 	core.num_threads = vs_t
 
@@ -2165,7 +2483,7 @@ def DEINT_EX(
 	func_name = "DEINT_EX"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
 	if not isinstance(obs, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 obs 的值无效")
@@ -2186,11 +2504,120 @@ def DEINT_EX(
 
 	core.num_threads = vs_t
 
-	global QTGMCv2
-	if QTGMCv2 is None :
-		from qtgmc import QTGMCv2
+	global qtgmc
+	if qtgmc is None :
+		try :
+			import qtgmc
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 qtgmc")
+	if LooseVersion(qtgmc.__version__) < LooseVersion("0.0.3") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 qtgmc 的版本号过低，至少 0.0.3")
 
-	output = QTGMCv2(input=input, fps_in=fps_in, obs=obs, deint_lv=deint_lv, src_type=src_type, deint_den=deint_den, tff=tff, cpu=cpu, gpu=gpu, check=False)
+	output = qtgmc.QTGMCv2(input=input, fps_in=fps_in, obs=obs, deint_lv=deint_lv, src_type=src_type, deint_den=deint_den, tff=tff, cpu=cpu, gpu=gpu)
+
+	return output
+
+##################################################
+## DPIR去块
+##################################################
+
+def DPIR_DBLK_NV(
+	input : vs.VideoNode,
+	lt_hd : bool = False,
+	model : typing.Literal[2, 3] = 2,
+	nr_lv : float = 50.0,
+	gpu : typing.Literal[0, 1, 2] = 0,
+	gpu_t : int = 2,
+	st_eng : bool = False,
+	ws_size : int = 0,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "DPIR_DBLK_NV"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(lt_hd, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
+	if model not in [2, 3] :
+		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
+	if not isinstance(nr_lv, (int, float)) or nr_lv <= 0.0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
+	if gpu not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
+	if not isinstance(st_eng, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 st_eng 的值无效")
+	if not isinstance(ws_size, int) or ws_size < 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 ws_size 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "trt") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 trt")
+
+	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
+	mdl_fname = ["drunet_deblocking_grayscale", "drunet_deblocking_color"][[2, 3].index(model)]
+	mdl_pth = plg_dir + "/models/dpir/" + mdl_fname + ".onnx"
+	if not os.path.exists(mdl_pth) :
+		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
+
+	global vsmlrt
+	if vsmlrt is None :
+		try :
+			import vsmlrt
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.1") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.18.1")
+
+	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+	size_in = w_in * h_in
+	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+	fmt_src = input.format
+	fmt_in = fmt_src.id
+	fmt_bit_in = fmt_src.bits_per_sample
+	fmt_cf_in = fmt_src.color_family
+
+	if (not lt_hd and (size_in > 1280 * 720)) or (size_in > 2048 * 1080) :
+		raise Exception("源分辨率超过限制的范围，已临时中止。")
+	if not st_eng and (((w_in > 2048) or (h_in > 1080)) or ((w_in < 64) or (h_in < 64))) :
+		raise Exception("源分辨率不属于动态引擎支持的范围，已临时中止。")
+
+	tile_size = 8
+	w_tmp = math.ceil(w_in / tile_size) * tile_size - w_in
+	h_tmp = math.ceil(h_in / tile_size) * tile_size - h_in
+	if w_tmp + h_tmp > 0 :
+		cut0 = core.std.AddBorders(clip=input, right=w_tmp, bottom=h_tmp)
+	else :
+		cut0 = input
+
+	if model == 2 :
+#		cut1 = core.resize.Bilinear(clip=cut0, format=vs.GRAYH, matrix_in_s="709")
+#		cut2 = core.std.ShufflePlanes(clips=cut1, planes=0, colorfamily=vs.GRAY)
+		cut1 = core.std.ShufflePlanes(clips=cut0, planes=0, colorfamily=vs.GRAY)
+		cut2 = core.resize.Bilinear(clip=cut1, format=vs.GRAYH, matrix_in_s="709")
+	else :
+		cut2 = core.resize.Bilinear(clip=cut0, format=vs.RGBH, matrix_in_s="709")
+
+	fin = vsmlrt.DPIR(clip=cut2, strength=nr_lv, model=model, backend=vsmlrt.BackendV2.TRT(
+		num_streams=gpu_t, force_fp16=True, output_format=1,
+		workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
+		use_cuda_graph=True, use_cublas=False, use_cudnn=False,
+		static_shape=st_eng, min_shapes=[0, 0] if st_eng else [64, 64],
+		opt_shapes=None if st_eng else ([1920, 1080] if lt_hd else [1280, 720]), max_shapes=None if st_eng else ([2048, 1080] if lt_hd else [1280, 720]),
+		device_id=gpu, short_path=True))
+
+	if model == 2 :
+		pre_mg = core.resize.Bilinear(clip=fin, format=fin.format.replace(bits_per_sample=fmt_bit_in, sample_type=0))
+#		pre_mg = core.resize.Bilinear(clip=fin, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+		output = core.std.ShufflePlanes(clips=[pre_mg, cut0, cut0], planes=[0, 1, 2], colorfamily=fmt_cf_in)
+	else :
+		output = core.resize.Bilinear(clip=fin, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+
+	if w_tmp + h_tmp > 0 :
+		output = core.std.Crop(clip=output, right=w_tmp, bottom=h_tmp)
 
 	return output
 
@@ -2214,6 +2641,13 @@ def EDI_AA_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if cpu :
+		if not hasattr(core, "znedi3") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 znedi3")
+	else :
+		if not hasattr(core, "nnedi3cl") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 nnedi3cl")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
@@ -2257,6 +2691,9 @@ def EDI_AA_NV(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "eedi2cuda") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 eedi2cuda")
+
 	core.num_threads = vs_t
 
 	output = core.eedi2cuda.AA2(clip=input, mthresh=10, lthresh=20, vthresh=20, estr=2, dstr=4, maxd=24, map=0, nt=50, pp=1, num_streams=gpu_t, device_id=gpu)
@@ -2269,7 +2706,7 @@ def EDI_AA_NV(
 
 def IVTC_STD(
 	input : vs.VideoNode,
-	fps_in : float = 23.976,
+	fps_in : float = 25,
 	ivtc_m : typing.Literal[1, 2] = 1,
 	vs_t : int = vs_thd_dft,
 ) -> vs.VideoNode :
@@ -2277,12 +2714,19 @@ def IVTC_STD(
 	func_name = "IVTC_STD"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if fps_in <= 0.0 :
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
 	if ivtc_m not in [1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 ivtc_m 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if ivtc_m == 1 :
+		if not hasattr(core, "vivtc") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 vivtc")
+	elif ivtc_m == 2 :
+		if not hasattr(core, "tivtc") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 tivtc")
 
 	core.num_threads = vs_t
 	if fps_in <= 24 or fps_in >= 31 or (fps_in >= 26 and fps_in <= 29) :
@@ -2295,7 +2739,7 @@ def IVTC_STD(
 			elif fps_in > 29 and fps_in < 31 :
 				output = core.vivtc.VDecimate(clip=input, cycle=5)
 		elif ivtc_m == 2 :
-			cut0 = core.std.AssumeFPS(clip=input, fpsnum=fps_in * 1000, fpsden=1000)
+			cut0 = core.std.AssumeFPS(clip=input, fpsnum=fps_in * 1e6, fpsden=1e6)
 			cut1 = core.tivtc.TDecimate(clip=cut0, mode=7, rate=24 / 1.001)
 			output = core.std.AssumeFPS(clip=cut1, fpsnum=24000, fpsden=1001)
 
@@ -2316,6 +2760,15 @@ def STAB_STD(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "focus2") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 focus2")
+	if not hasattr(core, "mv") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 mv")
+	if not hasattr(core, "misc") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 misc")
+	if not hasattr(core, "rgvs") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 rgvs")
 
 	core.num_threads = vs_t
 
@@ -2344,6 +2797,13 @@ def STAB_HQ(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "mv") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 mv")
+	if not hasattr(core, "misc") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 misc")
+	if not hasattr(core, "rgvs") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 rgvs")
+
 	core.num_threads = vs_t
 
 	def _scdetect(clip: vs.VideoNode, threshold: float = 0.1) -> vs.VideoNode :
@@ -2354,7 +2814,7 @@ def STAB_HQ(
 			return fout
 		sc = clip
 		if clip.format.color_family == vs.RGB :
-			sc = clip.resize.Point(format=vs.GRAY8, matrix_s="709")
+			sc = core.resize.Point(clip=clip, format=vs.GRAY8, matrix_s="709")
 		sc = sc.misc.SCDetect(threshold=threshold)
 		if clip.format.color_family == vs.RGB :
 			sc = clip.std.ModifyFrame(clips=[clip, sc], selector=_copy_property)
@@ -2395,7 +2855,7 @@ def UAI_DML(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(clamp, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 clamp 的值无效")
-	if len(model_pth) == 0 :
+	if len(model_pth) <= 5 :
 		raise vs.Error(f"模块 {func_name} 的子参数 model_pth 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
@@ -2404,9 +2864,26 @@ def UAI_DML(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "ort") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 ort")
+	if clamp :
+		if not hasattr(core, "akarin") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 akarin")
+
+	plg_dir = os.path.dirname(core.ort.Version()["path"]).decode()
+	mdl_pth_rel = plg_dir + "/models/" + model_pth
+	if not os.path.exists(mdl_pth_rel) and not os.path.exists(model_pth) :
+		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
+	mdl_pth = mdl_pth_rel if os.path.exists(mdl_pth_rel) else model_pth
+
 	global vsmlrt
 	if vsmlrt is None :
-		import vsmlrt
+		try :
+			import vsmlrt
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.15.25") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.15.25")
 
 	core.num_threads = vs_t
 	fmt_in = input.format.id
@@ -2416,7 +2893,7 @@ def UAI_DML(
 	if clamp :
 		clip = core.akarin.Expr(clips=clip, expr="x 0 1 clamp")
 	be_param = vsmlrt.BackendV2.ORT_DML(device_id=gpu, num_streams=gpu_t, fp16=True)
-	infer = vsmlrt.inference(clips=clip, network_path=os.path.join(vsmlrt.models_path, model_pth), backend=be_param)
+	infer = vsmlrt.inference(clips=clip, network_path=mdl_pth, backend=be_param)
 	output = core.resize.Bilinear(clip=infer, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
 
 	return output
@@ -2432,7 +2909,6 @@ def UAI_NV_TRT(
 	opt_lv : typing.Literal[0, 1, 2, 3, 4, 5] = 3,
 	cuda_opt : typing.List[int] = [0, 0, 0],
 	fp16 : bool = False,
-	tf32 : bool = True,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : int = 2,
 	st_eng : bool = False,
@@ -2447,7 +2923,7 @@ def UAI_NV_TRT(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(clamp, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 clamp 的值无效")
-	if len(model_pth) == 0 :
+	if len(model_pth) <= 5 :
 		raise vs.Error(f"模块 {func_name} 的子参数 model_pth 的值无效")
 	if opt_lv not in [0, 1, 2, 3, 4, 5] :
 		raise vs.Error(f"模块 {func_name} 的子参数 opt_lv 的值无效")
@@ -2455,18 +2931,16 @@ def UAI_NV_TRT(
 		raise vs.Error(f"模块 {func_name} 的子参数 cuda_opt 的值无效")
 	if not isinstance(fp16, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 fp16 的值无效")
-	if not isinstance(tf32, bool) :
-		raise vs.Error(f"模块 {func_name} 的子参数 tf32 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(gpu_t, int) or gpu_t <= 0 :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
 	if not isinstance(st_eng, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 st_eng 的值无效")
-	if st_eng :
-		if not (res_opt is None and res_max is None) :
-			raise vs.Error(f"模块 {func_name} 的子参数 res_opt 或 res_max 的值无效")
-	else :
+#	if st_eng :
+#		if not (res_opt is None and res_max is None) :
+#			raise vs.Error(f"模块 {func_name} 的子参数 res_opt 或 res_max 的值无效")
+	if not st_eng :
 		if not (isinstance(res_opt, list) and len(res_opt) == 2 and all(isinstance(i, int) for i in res_opt)) :
 			raise vs.Error(f"模块 {func_name} 的子参数 res_opt 的值无效")
 		if not (isinstance(res_max, list) and len(res_max) == 2 and all(isinstance(i, int) for i in res_max)) :
@@ -2476,9 +2950,26 @@ def UAI_NV_TRT(
 	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
 		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
 
+	if not hasattr(core, "trt") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 trt")
+	if clamp :
+		if not hasattr(core, "akarin") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 akarin")
+
+	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
+	mdl_pth_rel = plg_dir + "/models/" + model_pth
+	if not os.path.exists(mdl_pth_rel) and not os.path.exists(model_pth) :
+		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
+	mdl_pth = mdl_pth_rel if os.path.exists(mdl_pth_rel) else model_pth
+
 	global vsmlrt
 	if vsmlrt is None :
-		import vsmlrt
+		try :
+			import vsmlrt
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.1") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.18.1")
 
 	core.num_threads = vs_t
 	fmt_in = input.format.id
@@ -2491,10 +2982,68 @@ def UAI_NV_TRT(
 	be_param = vsmlrt.BackendV2.TRT(
 		builder_optimization_level=opt_lv, short_path=True, device_id=gpu,
 		num_streams=gpu_t, use_cuda_graph=nv1, use_cublas=nv2, use_cudnn=nv3,
-		fp16=fp16, force_fp16=False, tf32=tf32, output_format=1 if fp16 else 0, workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
+		fp16=fp16, force_fp16=False, tf32=True, output_format=1 if fp16 else 0, workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
 		static_shape=st_eng, min_shapes=[0, 0] if st_eng else [64, 64], opt_shapes=None if st_eng else res_opt, max_shapes=None if st_eng else res_max)
-	infer = vsmlrt.inference(clips=clip, network_path=os.path.join(vsmlrt.models_path, model_pth), backend=be_param)
+	infer = vsmlrt.inference(clips=clip, network_path=mdl_pth, backend=be_param)
 	output = core.resize.Bilinear(clip=infer, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+
+	return output
+
+##################################################
+## 自定义MadVR渲染 # TODO
+##################################################
+
+def UVR_MAD(
+	input : vs.VideoNode,
+	ngu : typing.Literal[0, 1, 2, 3, 4] = 0,
+	ngu_q : typing.Literal[1, 2, 3, 4] = 1,
+	rca_lv : typing.Literal[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = 0,
+	rca_q : typing.Literal[1, 2, 3, 4] = 1,
+#	uopts : typing.Optional[str] = None, # TODO
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "UVR_MAD"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if ngu not in [0, 1, 2, 3, 4] :
+		raise vs.Error(f"模块 {func_name} 的子参数 ngu 的值无效")
+	if ngu_q not in [1, 2, 3, 4] :
+		raise vs.Error(f"模块 {func_name} 的子参数 ngu_q 的值无效")
+	if rca_lv not in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] :
+		raise vs.Error(f"模块 {func_name} 的子参数 rca_lv 的值无效")
+	if rca_q not in [1, 2, 3, 4] :
+		raise vs.Error(f"模块 {func_name} 的子参数 rca_q 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "madvr") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 madvr")
+
+	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+	fmt_in = input.format.id
+	fmt_mad = [vs.YUV420P8, vs.YUV420P10, vs.YUV420P16, vs.YUV422P8, vs.YUV422P10, vs.YUV422P16, vs.YUV440P8, vs.YUV444P8, vs.YUV444P10, vs.YUV444P16]
+	algo = (["nguAa", "nguSoft", "nguStandard", "nguSharp"][ngu - 1] + ["Low", "Medium", "High", "VeryHigh"][ngu_q - 1]) if ngu > 0 else None
+	w_rs, h_rs = w_in * 2, h_in * 2
+	quality = ["low", "medium", "high", "veryHigh"][rca_q - 1]
+
+	param_size1 = ("upscale(newWidth=%d,newHeight=%d,algo=%s,sigmoidal=on)" % (w_rs, h_rs, algo)) if algo is not None else None
+	param_other2 = ("rca(strength=%d,quality=%s)" % (rca_lv, quality)) if rca_lv > 0 else None
+	param_format3 = "setOutputFormat(format=yuv444,bitdepth=10)"
+	mad_param = []
+	for var in [param_size1, param_other2, param_format3] :
+		if var is not None :
+			mad_param.append(var)
+
+	if fmt_in not in fmt_mad :
+		cut0 = core.resize.Bilinear(clip=input, format=vs.YUV444P10)
+	else :
+		cut0 = input
+	output = core.madvr.Process(clip=cut0, commands=mad_param, adapter=False)
+	if colorlv == 0 :
+		output = core.resize.Bilinear(clip=output, range=1)
 
 	return output
 

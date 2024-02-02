@@ -21,7 +21,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//!DESC Anime4K-v3.2-Deblur-DoG-(HQ)-Luma
+//!DESC [Anime4K_Deblur_DoG][v3.2] (HQ)-Luma
 //!HOOK MAIN
 //!BIND HOOKED
 //!SAVE LINELUMA
@@ -35,7 +35,7 @@ vec4 hook() {
     return vec4(get_luma(HOOKED_tex(HOOKED_pos)), 0.0, 0.0, 0.0);
 }
 
-//!DESC Anime4K-v3.2-Deblur-DoG-Kernel-X
+//!DESC [Anime4K_Deblur_DoG][v3.2] Kernel-X
 //!HOOK MAIN
 //!BIND HOOKED
 //!BIND LINELUMA
@@ -73,7 +73,7 @@ vec4 hook() {
 }
 
 
-//!DESC Anime4K-v3.2-Deblur-DoG-Kernel-Y
+//!DESC [Anime4K_Deblur_DoG][v3.2] Kernel-Y
 //!HOOK MAIN
 //!BIND HOOKED
 //!BIND MMKERNEL
@@ -114,7 +114,7 @@ vec4 hook() {
     return vec4(lumGaussian7(HOOKED_pos, vec2(0.0, HOOKED_pt.y)), minmax3(HOOKED_pos, vec2(0.0, HOOKED_pt.y)), 0.0);
 }
 
-//!DESC Anime4K-v3.2-Deblur-DoG-Apply
+//!DESC [Anime4K_Deblur_DoG][v3.2] Apply
 //!HOOK MAIN
 //!BIND HOOKED
 //!BIND LINELUMA

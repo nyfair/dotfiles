@@ -21,7 +21,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//!DESC Anime4K-v3.2-Darken-DoG-(HQ)-Luma
+//!DESC [Anime4K_Darken_HQ][v3.2] DoG-(HQ)-Luma
 //!HOOK MAIN
 //!BIND HOOKED
 //!SAVE LINELUMA
@@ -35,7 +35,7 @@ vec4 hook() {
     return vec4(get_luma(HOOKED_tex(HOOKED_pos)), 0.0, 0.0, 0.0);
 }
 
-//!DESC Anime4K-v3.2-Darken-DoG-(HQ)-Difference-X
+//!DESC [Anime4K_Darken_HQ][v3.2] DoG-(HQ)-Difference-X
 //!HOOK MAIN
 //!BIND HOOKED
 //!BIND LINELUMA
@@ -74,7 +74,7 @@ vec4 hook() {
     return vec4(comp_gaussian_x(), 0.0, 0.0, 0.0);
 }
 
-//!DESC Anime4K-v3.2-Darken-DoG-(HQ)-Difference-Y
+//!DESC [Anime4K_Darken_HQ][v3.2] DoG-(HQ)-Difference-Y
 //!HOOK MAIN
 //!BIND HOOKED
 //!BIND LINELUMA
@@ -114,7 +114,7 @@ vec4 hook() {
     return vec4(min(LINELUMA_tex(HOOKED_pos).x - comp_gaussian_y(), 0.0), 0.0, 0.0, 0.0);
 }
 
-//!DESC Anime4K-v3.2-Darken-DoG-(HQ)-Gaussian-X
+//!DESC [Anime4K_Darken_HQ][v3.2] DoG-(HQ)-Gaussian-X
 //!HOOK MAIN
 //!BIND HOOKED
 //!BIND LINEKERNEL
@@ -153,7 +153,7 @@ vec4 hook() {
     return vec4(comp_gaussian_x(), 0.0, 0.0, 0.0);
 }
 
-//!DESC Anime4K-v3.2-Darken-DoG-(HQ)-Gaussian-Y
+//!DESC [Anime4K_Darken_HQ][v3.2] DoG-(HQ)-Gaussian-Y
 //!HOOK MAIN
 //!BIND HOOKED
 //!BIND LINEKERNEL

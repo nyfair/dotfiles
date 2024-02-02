@@ -18,7 +18,7 @@
 //!WIDTH NATIVE_CROPPED.w
 //!WHEN NATIVE_CROPPED.h POSTKERNEL.h >
 //!COMPONENTS 3
-//!DESC SSimDownscaler L2 pass 1
+//!DESC [SSimDownscaler] L2 pass 1
 
 #define axis 1
 
@@ -58,7 +58,7 @@ vec4 hook() {
 //!SAVE L2
 //!WHEN NATIVE_CROPPED.w POSTKERNEL.w >
 //!COMPONENTS 3
-//!DESC SSimDownscaler L2 pass 2
+//!DESC [SSimDownscaler] L2 pass 2
 
 #define axis 0
 
@@ -95,7 +95,7 @@ vec4 hook() {
 //!SAVE MR
 //!WHEN NATIVE_CROPPED.h POSTKERNEL.h >
 //!COMPONENTS 4
-//!DESC SSimDownscaler mean & R
+//!DESC [SSimDownscaler] mean & R
 
 #define oversharp   0.0
 
@@ -158,7 +158,7 @@ vec4 hook() {
 //!BIND HOOKED
 //!BIND MR
 //!WHEN NATIVE_CROPPED.h POSTKERNEL.h >
-//!DESC SSimDownscaler final pass
+//!DESC [SSimDownscaler] final pass
 
 #define locality    2.0
 

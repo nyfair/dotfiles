@@ -19,7 +19,7 @@
 //!SAVE LOWRES_Y
 //!WIDTH LUMA.w
 //!WHEN CHROMA.w LUMA.w <
-//!DESC KrigBilateral Downscaling Y pass 1
+//!DESC [KrigBilateral] Downscaling Y pass 1
 
 #define offset      vec2(0)
 
@@ -56,7 +56,7 @@ vec4 hook() {
 //!BIND HOOKED
 //!SAVE LOWRES_Y
 //!WHEN CHROMA.w LUMA.w <
-//!DESC KrigBilateral Downscaling Y pass 2
+//!DESC [KrigBilateral] Downscaling Y pass 2
 
 #define offset      vec2(0)
 
@@ -96,7 +96,7 @@ vec4 hook() {
 //!HEIGHT LUMA.h
 //!WHEN CHROMA.w LUMA.w <
 //!OFFSET ALIGN
-//!DESC KrigBilateral Upscaling UV
+//!DESC [KrigBilateral] Upscaling UV
 
 #define sigma_nsq   256.0/(255.0*255.0)
 #define N           8

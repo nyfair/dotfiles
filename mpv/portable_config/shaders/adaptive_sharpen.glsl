@@ -27,7 +27,7 @@
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC adaptive_sharpen
+//!DESC [adaptive_sharpen]
 
 //--------------------------------------- Settings ------------------------------------------------
 

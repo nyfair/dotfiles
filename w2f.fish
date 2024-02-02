@@ -1,6 +1,6 @@
 function w2f
 	for i in **.wav **.WAV
-		ffmpeg -i (realpath $i) -compression_level 8 (string replace -r -i 'wav$' 'flac' (realpath $i)) 
+		ffmpeg -i $i -compression_level 8 (string replace -r -i 'wav$' 'flac' $i)
 		rm -f $i
 	end
 end

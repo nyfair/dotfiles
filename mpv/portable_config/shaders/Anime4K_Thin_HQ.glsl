@@ -21,7 +21,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//!DESC Anime4K-v3.2-Thin-(HQ)-Luma
+//!DESC [Anime4K_Thin_HQ][v3.2] Luma
 //!HOOK MAIN
 //!BIND HOOKED
 //!SAVE LINELUMA
@@ -35,7 +35,7 @@ vec4 hook() {
     return vec4(get_luma(HOOKED_tex(HOOKED_pos)), 0.0, 0.0, 0.0);
 }
 
-//!DESC Anime4K-v3.2-Thin-(HQ)-Sobel-X
+//!DESC [Anime4K_Thin_HQ][v3.2] Sobel-X
 //!HOOK MAIN
 //!BIND LINELUMA
 //!SAVE LINESOBEL
@@ -53,7 +53,7 @@ vec4 hook() {
 }
 
 
-//!DESC Anime4K-v3.2-Thin-(HQ)-Sobel-Y
+//!DESC [Anime4K_Thin_HQ][v3.2] Sobel-Y
 //!HOOK MAIN
 //!BIND LINESOBEL
 //!SAVE LINESOBEL
@@ -77,7 +77,7 @@ vec4 hook() {
 }
 
 
-//!DESC Anime4K-v3.2-Thin-(HQ)-Gaussian-X
+//!DESC [Anime4K_Thin_HQ][v3.2] Gaussian-X
 //!HOOK MAIN
 //!BIND HOOKED
 //!BIND LINESOBEL
@@ -117,7 +117,7 @@ vec4 hook() {
 }
 
 
-//!DESC Anime4K-v3.2-Thin-(HQ)-Gaussian-Y
+//!DESC [Anime4K_Thin_HQ][v3.2] Gaussian-Y
 //!HOOK MAIN
 //!BIND HOOKED
 //!BIND LINESOBEL
@@ -156,7 +156,7 @@ vec4 hook() {
     return vec4(comp_gaussian_y(), 0.0, 0.0, 0.0);
 }
 
-//!DESC Anime4K-v3.2-Thin-(HQ)-Kernel-X
+//!DESC [Anime4K_Thin_HQ][v3.2] Kernel-X
 //!HOOK MAIN
 //!BIND LINESOBEL
 //!SAVE LINESOBEL
@@ -174,7 +174,7 @@ vec4 hook() {
 }
 
 
-//!DESC Anime4K-v3.2-Thin-(HQ)-Kernel-Y
+//!DESC [Anime4K_Thin_HQ][v3.2] Kernel-Y
 //!HOOK MAIN
 //!BIND LINESOBEL
 //!SAVE LINESOBEL
@@ -197,7 +197,7 @@ vec4 hook() {
 }
 
 
-//!DESC Anime4K-v3.2-Thin-(HQ)-Warp
+//!DESC [Anime4K_Thin_HQ][v3.2] Warp
 //!HOOK MAIN
 //!BIND HOOKED
 //!BIND LINESOBEL

@@ -2,7 +2,7 @@
 ### 文档： https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
 ##################################################
 
-__version__ = "0.4.6"
+__version__ = "0.4.8"
 
 __all__ = [
 	"FMT_CHANGE", "FMT_CTRL", "FPS_CHANGE", "FPS_CTRL",
@@ -509,6 +509,7 @@ def CUGAN_NV(
 	input : vs.VideoNode,
 	lt_hd : bool = False,
 	nr_lv : typing.Literal[-1, 0, 3] = -1,
+	sharp_lv : float = 1.0,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : int = 2,
 	st_eng : bool = False,
@@ -523,6 +524,8 @@ def CUGAN_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
 	if nr_lv not in [-1, 0, 3] :
 		raise vs.Error(f"模块 {func_name} 的子参数 nr_lv 的值无效")
+	if not isinstance(sharp_lv, (int, float)) or sharp_lv < 0.0 or sharp_lv > 2.0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 sharp_lv 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(gpu_t, int) or gpu_t <= 0 :
@@ -550,7 +553,7 @@ def CUGAN_NV(
 		except ImportError :
 			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
 	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.1") :
-		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 版本号过低，至少 3.18.1 。")
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 版本号过低，至少 3.18.1")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
@@ -564,7 +567,7 @@ def CUGAN_NV(
 		raise Exception("源分辨率不属于动态引擎支持的范围，已临时中止。")
 
 	cut1 = core.resize.Bilinear(clip=input, format=vs.RGBH, matrix_in_s="709")
-	cut2 = vsmlrt.CUGAN(clip=cut1, noise=nr_lv, scale=2, version=2, backend=vsmlrt.BackendV2.TRT(
+	cut2 = vsmlrt.CUGAN(clip=cut1, noise=nr_lv, scale=2, alpha=sharp_lv, version=2, backend=vsmlrt.BackendV2.TRT(
 		num_streams=gpu_t, force_fp16=True, output_format=1,
 		workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
 		use_cuda_graph=True, use_cublas=False, use_cudnn=False,
@@ -652,7 +655,7 @@ def EDI_US_STD(
 def ESRGAN_DML(
 	input : vs.VideoNode,
 	lt_hd : bool = False,
-	model : typing.Literal[0, 2, 5005, 5006, 5007] = 5005,
+	model : typing.Literal[0, 2, 5005, 5006, 5007, 5008, 5009, 5010] = 5005,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : int = 2,
 	vs_t : int = vs_thd_dft,
@@ -663,7 +666,7 @@ def ESRGAN_DML(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(lt_hd, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
-	if model not in [0, 2, 5005, 5006, 5007] :
+	if model not in [0, 2, 5005, 5006, 5007, 5008, 5009, 5010] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
@@ -676,7 +679,7 @@ def ESRGAN_DML(
 		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 ort")
 
 	plg_dir = os.path.dirname(core.ort.Version()["path"]).decode()
-	mdl_fname = ["RealESRGANv2-animevideo-xsx2", "realesr-animevideov3", "animejanaiV2L1", "animejanaiV2L2", "animejanaiV2L3"][[0, 2, 5005, 5006, 5007].index(model)]
+	mdl_fname = ["RealESRGANv2-animevideo-xsx2", "realesr-animevideov3", "animejanaiV2L1", "animejanaiV2L2", "animejanaiV2L3", "animejanaiV3-HD-L1", "animejanaiV3-HD-L2", "animejanaiV3-HD-L3"][[0, 2, 5005, 5006, 5007, 5008, 5009, 5010].index(model)]
 	mdl_pth = plg_dir + "/models/RealESRGANv2/" + mdl_fname + ".onnx"
 	if not os.path.exists(mdl_pth) :
 		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
@@ -687,8 +690,8 @@ def ESRGAN_DML(
 			import vsmlrt
 		except ImportError :
 			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
-	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.15.25") :
-		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.15.25")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.15.47") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.15.47")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
@@ -713,7 +716,7 @@ def ESRGAN_DML(
 def ESRGAN_NV(
 	input : vs.VideoNode,
 	lt_hd : bool = False,
-	model : typing.Literal[0, 2, 5005, 5006, 5007] = 5005,
+	model : typing.Literal[0, 2, 5005, 5006, 5007, 5008, 5009, 5010] = 5005,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : int = 2,
 	st_eng : bool = False,
@@ -726,7 +729,7 @@ def ESRGAN_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(lt_hd, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 lt_hd 的值无效")
-	if model not in [0, 2, 5005, 5006, 5007] :
+	if model not in [0, 2, 5005, 5006, 5007, 5008, 5009, 5010] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
@@ -743,7 +746,7 @@ def ESRGAN_NV(
 		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 trt")
 
 	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
-	mdl_fname = ["RealESRGANv2-animevideo-xsx2", "realesr-animevideov3", "animejanaiV2L1", "animejanaiV2L2", "animejanaiV2L3"][[0, 2, 5005, 5006, 5007].index(model)]
+	mdl_fname = ["RealESRGANv2-animevideo-xsx2", "realesr-animevideov3", "animejanaiV2L1", "animejanaiV2L2", "animejanaiV2L3", "animejanaiV3-HD-L1", "animejanaiV3-HD-L2", "animejanaiV3-HD-L3"][[0, 2, 5005, 5006, 5007, 5008, 5009, 5010].index(model)]
 	mdl_pth = plg_dir + "/models/RealESRGANv2/" + mdl_fname + ".onnx"
 	if not os.path.exists(mdl_pth) :
 		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
@@ -754,8 +757,8 @@ def ESRGAN_NV(
 			import vsmlrt
 		except ImportError :
 			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
-	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.1") :
-		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.18.1")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.23") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.18.23")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
@@ -1190,7 +1193,7 @@ def MVT_MQ(
 
 def RIFE_STD(
 	input : vs.VideoNode,
-	model : typing.Literal[21, 37, 39] = 21,
+	model : typing.Literal[23, 41, 43, 45] = 23,
 	t_tta : bool = False,
 	fps_num : int = 2,
 	fps_den : int = 1,
@@ -1205,7 +1208,7 @@ def RIFE_STD(
 	func_name = "RIFE_STD"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if model not in [21, 37, 39] :
+	if model not in [23, 41, 43, 45] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if not isinstance(t_tta, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 t_tta 的值无效")
@@ -1264,7 +1267,7 @@ def RIFE_STD(
 def RIFE_NV(
 	input : vs.VideoNode,
 	lt_d2k : bool = False,
-	model : typing.Literal[46, 413, 4131] = 46,
+	model : typing.Literal[46, 4131, 414, 4141] = 46,
 	ext_proc : bool = True,
 	t_tta : bool = False,
 	fps_in : float = 23.976,
@@ -1283,7 +1286,7 @@ def RIFE_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(lt_d2k, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 lt_d2k 的值无效")
-	if model not in [46, 413, 4131] :
+	if model not in [46, 4131, 414, 4141] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if not isinstance(ext_proc, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 ext_proc 的值无效")
@@ -1323,9 +1326,9 @@ def RIFE_NV(
 	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
 	mdl_pname = "rife/" if ext_proc else "rife_v2/"
 	if t_tta :
-		mdl_fname = ["rife_v4.6_ensemble", "rife_v4.13_ensemble", "rife_v4.13_lite_ensemble"][[46, 413, 4131].index(model)]
+		mdl_fname = ["rife_v4.6_ensemble", "rife_v4.13_lite_ensemble", "rife_v4.14_ensemble", "rife_v4.14_lite_ensemble"][[46, 4131, 414, 4141].index(model)]
 	else :
-		mdl_fname = ["rife_v4.6", "rife_v4.13", "rife_v4.13_lite"][[46, 413, 4131].index(model)]
+		mdl_fname = ["rife_v4.6", "rife_v4.13_lite", "rife_v4.14", "rife_v4.14_lite"][[46, 4131, 414, 4141].index(model)]
 	mdl_pth = plg_dir + "/models/" + mdl_pname + mdl_fname + ".onnx"
 	if not os.path.exists(mdl_pth) :
 		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
@@ -1336,8 +1339,8 @@ def RIFE_NV(
 			import vsmlrt
 		except ImportError :
 			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
-	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.19") :
-		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.18.19")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.22") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.18.22")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height

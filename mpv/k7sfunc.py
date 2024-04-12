@@ -2,7 +2,7 @@
 ### 文档： https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
 ##################################################
 
-__version__ = "0.4.8"
+__version__ = "0.5.0"
 
 __all__ = [
 	"FMT_CHANGE", "FMT_CTRL", "FPS_CHANGE", "FPS_CTRL",
@@ -12,16 +12,132 @@ __all__ = [
 	"COLOR_P3W_FIX", "CSC_RB", "DEBAND_STD", "DEINT_LQ", "DEINT_STD", "DEINT_EX", "DPIR_DBLK_NV", "EDI_AA_STD", "EDI_AA_NV", "IVTC_STD", "STAB_STD", "STAB_HQ", "UAI_DML", "UAI_NV_TRT", "UVR_MAD",
 ]
 
-from distutils.version import LooseVersion
-import fractions
-import math
-import os
-import typing
-import vapoursynth as vs
+##################################################
+## https://github.com/python/cpython/blob/v3.11.8/Lib/distutils/version.py
+##################################################
+
+import re
+
+class Version:
+	def __init__ (self, vstring=None):
+		if vstring:
+			self.parse(vstring)
+	def __repr__ (self):
+		return "%s ('%s')" % (self.__class__.__name__, str(self))
+	def __eq__(self, other):
+		c = self._cmp(other)
+		if c is NotImplemented:
+			return c
+		return c == 0
+	def __lt__(self, other):
+		c = self._cmp(other)
+		if c is NotImplemented:
+			return c
+		return c < 0
+	def __le__(self, other):
+		c = self._cmp(other)
+		if c is NotImplemented:
+			return c
+		return c <= 0
+	def __gt__(self, other):
+		c = self._cmp(other)
+		if c is NotImplemented:
+			return c
+		return c > 0
+	def __ge__(self, other):
+		c = self._cmp(other)
+		if c is NotImplemented:
+			return c
+		return c >= 0
+
+class StrictVersion (Version):
+	version_re = re.compile(r'^(\d+) \. (\d+) (\. (\d+))? ([ab](\d+))?$',
+							re.VERBOSE | re.ASCII)
+	def parse (self, vstring):
+		match = self.version_re.match(vstring)
+		if not match:
+			raise ValueError("invalid version number '%s'" % vstring)
+		(major, minor, patch, prerelease, prerelease_num) = \
+			match.group(1, 2, 4, 5, 6)
+		if patch:
+			self.version = tuple(map(int, [major, minor, patch]))
+		else:
+			self.version = tuple(map(int, [major, minor])) + (0,)
+		if prerelease:
+			self.prerelease = (prerelease[0], int(prerelease_num))
+		else:
+			self.prerelease = None
+	def __str__ (self):
+		if self.version[2] == 0:
+			vstring = '.'.join(map(str, self.version[0:2]))
+		else:
+			vstring = '.'.join(map(str, self.version))
+		if self.prerelease:
+			vstring = vstring + self.prerelease[0] + str(self.prerelease[1])
+		return vstring
+	def _cmp (self, other):
+		if isinstance(other, str):
+			other = StrictVersion(other)
+		elif not isinstance(other, StrictVersion):
+			return NotImplemented
+		if self.version != other.version:
+			if self.version < other.version:
+				return -1
+			else:
+				return 1
+		if (not self.prerelease and not other.prerelease):
+			return 0
+		elif (self.prerelease and not other.prerelease):
+			return -1
+		elif (not self.prerelease and other.prerelease):
+			return 1
+		elif (self.prerelease and other.prerelease):
+			if self.prerelease == other.prerelease:
+				return 0
+			elif self.prerelease < other.prerelease:
+				return -1
+			else:
+				return 1
+		else:
+			assert False, "never get here"
+
+class LooseVersion (Version):
+	component_re = re.compile(r'(\d+ | [a-z]+ | \.)', re.VERBOSE)
+	def __init__ (self, vstring=None):
+		if vstring:
+			self.parse(vstring)
+	def parse (self, vstring):
+		self.vstring = vstring
+		components = [x for x in self.component_re.split(vstring)
+								if x and x != '.']
+		for i, obj in enumerate(components):
+			try:
+				components[i] = int(obj)
+			except ValueError:
+				pass
+		self.version = components
+	def __str__ (self):
+		return self.vstring
+	def __repr__ (self):
+		return "LooseVersion ('%s')" % str(self)
+	def _cmp (self, other):
+		if isinstance(other, str):
+			other = LooseVersion(other)
+		elif not isinstance(other, LooseVersion):
+			return NotImplemented
+		if self.version == other.version:
+			return 0
+		if self.version < other.version:
+			return -1
+		if self.version > other.version:
+			return 1
 
 ##################################################
 ## 初始设置
 ##################################################
+
+import os
+import vapoursynth as vs
 
 vs_thd_init = os.cpu_count()
 if vs_thd_init > 8 and vs_thd_init <= 16 :
@@ -45,6 +161,10 @@ dfttest2 = None
 nnedi3_resample = None
 qtgmc = None
 vsmlrt = None
+
+import typing
+import math
+import fractions
 
 ##################################################
 ## 格式转换 # TODO
@@ -1193,7 +1313,7 @@ def MVT_MQ(
 
 def RIFE_STD(
 	input : vs.VideoNode,
-	model : typing.Literal[23, 41, 43, 45] = 23,
+	model : typing.Literal[23, 47, 49] = 23,
 	t_tta : bool = False,
 	fps_num : int = 2,
 	fps_den : int = 1,
@@ -1208,7 +1328,7 @@ def RIFE_STD(
 	func_name = "RIFE_STD"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if model not in [23, 41, 43, 45] :
+	if model not in [23, 47, 49] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if not isinstance(t_tta, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 t_tta 的值无效")
@@ -1267,7 +1387,7 @@ def RIFE_STD(
 def RIFE_NV(
 	input : vs.VideoNode,
 	lt_d2k : bool = False,
-	model : typing.Literal[46, 4131, 414, 4141] = 46,
+	model : typing.Literal[46, 415, 4151] = 46,
 	ext_proc : bool = True,
 	t_tta : bool = False,
 	fps_in : float = 23.976,
@@ -1286,7 +1406,7 @@ def RIFE_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(lt_d2k, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 lt_d2k 的值无效")
-	if model not in [46, 4131, 414, 4141] :
+	if model not in [46, 415, 4151] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if not isinstance(ext_proc, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 ext_proc 的值无效")
@@ -1326,9 +1446,9 @@ def RIFE_NV(
 	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
 	mdl_pname = "rife/" if ext_proc else "rife_v2/"
 	if t_tta :
-		mdl_fname = ["rife_v4.6_ensemble", "rife_v4.13_lite_ensemble", "rife_v4.14_ensemble", "rife_v4.14_lite_ensemble"][[46, 4131, 414, 4141].index(model)]
+		mdl_fname = ["rife_v4.6_ensemble", "rife_v4.15_ensemble", "rife_v4.15_lite_ensemble"][[46, 415, 4151].index(model)]
 	else :
-		mdl_fname = ["rife_v4.6", "rife_v4.13_lite", "rife_v4.14", "rife_v4.14_lite"][[46, 4131, 414, 4141].index(model)]
+		mdl_fname = ["rife_v4.6", "rife_v4.15", "rife_v4.15_lite"][[46, 415, 4151].index(model)]
 	mdl_pth = plg_dir + "/models/" + mdl_pname + mdl_fname + ".onnx"
 	if not os.path.exists(mdl_pth) :
 		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
@@ -1339,8 +1459,8 @@ def RIFE_NV(
 			import vsmlrt
 		except ImportError :
 			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
-	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.18.22") :
-		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.18.22")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.20.4") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.20.4")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
@@ -1359,9 +1479,9 @@ def RIFE_NV(
 	scale_model = 1
 	if lt_d2k and st_eng and (size_in > 2048 * 1088) :
 		scale_model = 0.5
-		if not ext_proc : # https://github.com/AmusementClub/vs-mlrt/blob/57cfe194fa8c21d221bdfaffebe4fee1af43d40c/scripts/vsmlrt.py#L903
+		if not ext_proc : # https://github.com/AmusementClub/vs-mlrt/blob/27d417572ba4359c4eb0f45da691f75275842d98/scripts/vsmlrt.py#L945
 			scale_model = 1
-	if model >= 47 : # https://github.com/AmusementClub/vs-mlrt/blob/57cfe194fa8c21d221bdfaffebe4fee1af43d40c/scripts/vsmlrt.py#L895
+	if model >= 47 : # https://github.com/AmusementClub/vs-mlrt/blob/27d417572ba4359c4eb0f45da691f75275842d98/scripts/vsmlrt.py#L937
 		scale_model = 1
 
 	tile_size = 32 / scale_model

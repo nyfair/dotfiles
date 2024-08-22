@@ -1,6 +1,6 @@
 --[[
 SOURCE_ https://github.com/po5/thumbfast/blob/master/thumbfast.lua
-COMMIT_ 8498a34b594578a8b5ddd38c8c2ba20023638fc0
+COMMIT_ 7c1718e14f084650970845eb443e29b58e27cf1d
 文档_ thumbfast.conf
 
 适配多个OSC类脚本的新缩略图引擎
@@ -26,9 +26,9 @@ local options = {
     quit_after_inactivity = 0,
     network = false,
     audio = false,
-    hwdec = true,
     direct_io = true,            -- Windows only: use native Windows API to write to pipe (requires LuaJIT)
 
+    hwdec = "yes",
     sw_threads = 2,
     binpath = "default",
     min_duration = 0,
@@ -414,16 +414,17 @@ local function spawn(time)
     has_vid = vid or 0
 
     local args = {
-        mpv_path, "--config=no", "--terminal=no", "--msg-level=all=no", "--idle=yes", "--keep-open=always","--pause=yes", "--ao=null", "--vo=null",
-        "--load-auto-profiles=no", "--load-osd-console=no", "--load-stats-overlay=no", "--osc=no",
-        "--vd-lavc-skiploopfilter=all", "--vd-lavc-skipidct=all", "--vd-lavc-software-fallback=1", "--vd-lavc-fast", "--vd-lavc-threads="..options.sw_threads, "--hwdec="..(options.hwdec and "auto" or "no"),
-        "--edition="..(properties["edition"] or "auto"), "--vid="..(vid or "auto"), "--sub=no", "--audio=no", "--sub-auto=no", "--audio-file-auto=no",
+        mpv_path, "--config=no", "--terminal=no", "--msg-level=all=no", "--idle=yes", "--keep-open=always",
+        "--pause=yes", "--ao=null", "--vo=null",
+        "--load-auto-profiles=no", "--load-osd-console=no", "--load-stats-overlay=no", "--osc=no", "autoload-files=no",
+        "--vd-lavc-skiploopfilter=all", "--vd-lavc-skipidct=all", "--vd-lavc-software-fallback=1", "--vd-lavc-fast",
+        "--vd-lavc-threads="..options.sw_threads, "--hwdec="..options.hwdec,
+        "--edition="..(properties["edition"] or "auto"), "--vid="..(vid or "auto"), "--sub=no", "--audio=no",
         "--start="..time,
-        "--ytdl-format=worst", "--demuxer-readahead-secs=0", "--demuxer-max-bytes=128KiB",
-        "--gpu-dumb-mode=yes", "--tone-mapping=clip", "--hdr-compute-peak=no",
+        "--gpu-dumb-mode=yes", "--dither-depth=no", "--tone-mapping=clip", "--hdr-compute-peak=no",
         "--sws-allow-zimg=no", "--sws-fast=yes", "--sws-scaler="..scale_sw,
-        "--audio-pitch-correction=no",
-        "--vf="..quality_fin(),
+        "--ytdl-format=worst", "--demuxer-readahead-secs=0", "--demuxer-max-bytes=128KiB",
+        "--vf="..quality_fin(), "--audio-pitch-correction=no", "--deinterlace=no",
         "--ovc=rawvideo", "--of=image2", "--ofopts=update=1", "--ocopy-metadata=no", "--o="..options.tnpath
     }
 
@@ -432,6 +433,7 @@ local function spawn(time)
     end
 
     if os_name == "windows" then
+        table.insert(args, "--media-controls=no")
         table.insert(args, "--input-ipc-server="..options.socket)
     elseif not script_written then
         local client_script_path = options.socket..".run"

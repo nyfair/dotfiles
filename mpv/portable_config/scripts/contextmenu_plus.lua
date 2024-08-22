@@ -1,6 +1,8 @@
 --[[
+文档_ contextmenu_plus.conf
+文档_ input_contextmenu_plus.conf
 SOURCE_ https://github.com/tsl0922/mpv-menu-plugin/blob/main/src/lua/dyn_menu.lua
-COMMIT_ 2d1a6ae65541a8b2331f04100004636be9f66797
+COMMIT_ 2704a977b8b0b48bd09659c73ee26243e8798eb2
 
 简化菜单编写 https://mpv.io/manual/master/#context-menu
 可用特殊变量参考 https://github.com/tsl0922/mpv-menu-plugin/wiki/Scripting
@@ -16,11 +18,13 @@ local msg = require('mp.msg')
 
 -- user options
 local o = {
-    use_mpv_impl = true,     -- use mpv's menu implementation if available
-    uosc_syntax = true,      -- toggle uosc menu syntax support
-    escape_title = true,     -- escape & to && in menu title
-    max_title_length = 40,   -- limit the title length, set to 0 to disable.
-    max_playlist_items = 15, -- limit the playlist items in submenu, set to 0 to disable.
+    use_mpv_impl       = true,    -- use mpv's menu implementation if available
+    input_conf         = 'default',
+    uosc_syntax        = true,    -- toggle uosc menu syntax support
+    uosc_alt           = false,
+    escape_title       = true,    -- escape & to && in menu title
+    max_title_length   = 40,      -- limit the title length, set to 0 to disable.
+    max_playlist_items = 20,      -- limit the playlist items in submenu, set to 0 to disable.
 }
 opts.read_options(o)
 
@@ -180,10 +184,16 @@ local function utf8_sub(s, i, j)
     return table.concat(t)
 end
 
+-- return the length of a utf8 string
+local function utf8_len(s)
+    local _, count = s:gsub(UTF8_PATTERN, "")
+    return count
+end
+
 -- abbreviate title if it's too long
 local function abbr_title(str)
     if not str or str == '' then return '' end
-    if o.max_title_length > 0 and str:len() > o.max_title_length then
+    if o.max_title_length > 0 and utf8_len(str) > o.max_title_length then
         return utf8_sub(str, 1, o.max_title_length) .. '...'
     end
     return str
@@ -243,18 +253,24 @@ local function build_track_items(list, type, prop, prefix)
     -- filename without extension, escaped for pattern matching
     local filename = get('filename/no-ext', ''):gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%0")
     local pos = tonumber(get(prop)) or -1
+
     for _, track in ipairs(list) do
         if track.type == type then
             local state = {}
-            -- there may be 2 tracks selected at the same time, for example: subtitle
-            if track.selected then
+            if track.selected and track.id == pos then
                 state[#state + 1] = 'checked'
-                if track.id ~= pos then state[#state + 1] = 'disabled' end
+                if type == 'sub' then
+                    if (prop == 'sid' and not get('sub-visibility')) or 
+                        (prop == 'secondary-sid' and not get('secondary-sub-visibility'))
+                    then
+                        state[#state + 1] = 'disabled'
+                    end
+                end
             end
 
             items[#items + 1] = {
                 title = build_track_title(track, prefix, filename),
-                shortcut = (track.lang and track.lang ~= '') and track.lang:upper() or nil,
+                shortcut = (track.lang and track.lang ~= '') and track.lang or nil,
                 cmd = string.format('set %s %d', prop, track.id),
                 state = state,
             }
@@ -548,7 +564,12 @@ local function get_input_conf()
     local prop = mp.get_property_native('input-conf')
     if prop:sub(1, 9) == 'memory://' then return prop:sub(10) end
 
-    prop = prop == '' and '~~/input.conf' or prop
+    if o.input_conf == 'default' then
+        prop = prop == '' and '~~/input.conf' or prop
+    else
+        prop = o.input_conf
+    end
+
     local conf_path = mp.command_native({ 'expand-path', prop })
 
     local f, err = io.open(conf_path, 'rb')
@@ -568,6 +589,7 @@ local function parse_input_conf(conf)
         local c = line:match('^%s*#')
         if c and (not o.uosc_syntax) then return end
         local key, cmd = line:match('%s*([%S]+)%s+(.-)%s*$')
+        if key and key:match('^#%S+') then return end
         return ((o.uosc_syntax and c) and '' or key), cmd
     end
 
@@ -668,7 +690,9 @@ mp.register_script_message('update', function(keyword, json)
 end)
 
 -- detect uosc installation
-mp.register_script_message('uosc-version', function() has_uosc = true end)
+if o.uosc_alt then
+    mp.register_script_message('uosc-version', function() has_uosc = true end)
+end
 
 -- update menu on idle, this reduces the update frequency
 mp.register_idle(function()

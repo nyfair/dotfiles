@@ -8,7 +8,8 @@ COMMIT_ 7c1718e14f084650970845eb443e29b58e27cf1d
 可用的快捷键示例（在 input.conf 中写入）：
 
  <KEY>   script-binding thumbfast/thumb_rerun    # 重启缩略图的获取（可用来手动修复缩略图卡死）
- <KEY>   script-binding thumbfast/thumb_toggle   # 启用/禁用缩略图预览
+ <KEY>   script-binding thumbfast/thumb_toggle   # 开/关缩略图预览
+ <KEY>   script-message thumb_hwdec toggle       # 开/关缩略图的硬解（可将其中的 {toggle} 参数换成指定的解码API）
 
 ]]
 
@@ -834,6 +835,22 @@ mp.add_key_binding(nil, "thumb_toggle", function()
         file_load()
         mp.osd_message("缩略图功能已启用", 2)
     end
+end)
+mp.register_script_message("thumb_hwdec", function(hwdec_api)
+    local hwdec_api_cur = options.hwdec
+    if hwdec_api_cur == hwdec_api then return end
+    if hwdec_api == "toggle" then
+        if hwdec_api_cur == "no" then
+            hwdec_api = "yes"
+        else
+            hwdec_api = "no"
+        end
+    end
+    options.hwdec = hwdec_api
+    mp.osd_message("缩略图已变更首选解码API：" .. hwdec_api, 2)
+    clear()
+    shutdown()
+    file_load()
 end)
 
 mp.register_idle(watch_changes)

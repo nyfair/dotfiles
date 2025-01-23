@@ -2,7 +2,7 @@
 ### 文档： https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
 ##################################################
 
-__version__ = "0.6.1"
+__version__ = "0.6.4"
 
 __all__ = [
 	"FMT_CHANGE", "FMT_CTRL", "FPS_CHANGE", "FPS_CTRL",
@@ -1391,7 +1391,7 @@ def MVT_MQ(
 
 def RIFE_STD(
 	input : vs.VideoNode,
-	model : typing.Literal[23, 64, 65] = 23,
+	model : typing.Literal[23, 70, 72, 73] = 23,
 	t_tta : bool = False,
 	fps_num : int = 2,
 	fps_den : int = 1,
@@ -1406,7 +1406,7 @@ def RIFE_STD(
 	func_name = "RIFE_STD"
 	if not isinstance(input, vs.VideoNode) :
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
-	if model not in [23, 64, 65] :
+	if model not in [23, 70, 72, 73] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if not isinstance(t_tta, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 t_tta 的值无效")
@@ -1467,7 +1467,7 @@ def RIFE_STD(
 def RIFE_NV(
 	input : vs.VideoNode,
 	lt_d2k : bool = False,
-	model : typing.Literal[46, 422, 4221] = 46,
+	model : typing.Literal[46, 4251, 426, 4262] = 46,
 	ext_proc : bool = True,
 	t_tta : bool = False,
 	fps_in : float = 23.976,
@@ -1486,7 +1486,7 @@ def RIFE_NV(
 		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
 	if not isinstance(lt_d2k, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 lt_d2k 的值无效")
-	if model not in [46, 422, 4221] :
+	if model not in [46, 4251, 426, 4262] :
 		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
 	if not isinstance(ext_proc, bool) :
 		raise vs.Error(f"模块 {func_name} 的子参数 ext_proc 的值无效")
@@ -1525,12 +1525,12 @@ def RIFE_NV(
 
 	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
 	mdl_pname = "rife/" if ext_proc else "rife_v2/"
-	if model in [422, 4221] : # https://github.com/AmusementClub/vs-mlrt/blob/abc5b1c777a5dde6bad51a099f28eba99375ef4e/scripts/vsmlrt.py#L989
+	if model in [4251, 426, 4262] :  ## https://github.com/AmusementClub/vs-mlrt/blob/2adfbab790eebe51c62c886400b0662570dfe3e9/scripts/vsmlrt.py#L1031-L1032
 		t_tta = False
 	if t_tta :
-		mdl_fname = ["rife_v4.6_ensemble", "rife_v4.22_ensemble", "rife_v4.22_lite_ensemble"][[46, 422, 4221].index(model)]
+		mdl_fname = ["rife_v4.6_ensemble"][[46].index(model)]
 	else :
-		mdl_fname = ["rife_v4.6", "rife_v4.22", "rife_v4.22_lite"][[46, 422, 4221].index(model)]
+		mdl_fname = ["rife_v4.6", "rife_v4.25_lite", "rife_v4.26", "rife_v4.26_heavy"][[46, 4251, 426, 4262].index(model)]
 	mdl_pth = plg_dir + "/models/" + mdl_pname + mdl_fname + ".onnx"
 	if not os.path.exists(mdl_pth) :
 		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
@@ -1541,8 +1541,8 @@ def RIFE_NV(
 			import vsmlrt
 		except ImportError :
 			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
-	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.21.16") :
-		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.21.16")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.22.10") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.22.10")
 
 	core.num_threads = vs_t
 	w_in, h_in = input.width, input.height
@@ -1561,12 +1561,17 @@ def RIFE_NV(
 	scale_model = 1
 	if lt_d2k and st_eng and (size_in > 2048 * 1088) :
 		scale_model = 0.5
-		if not ext_proc : # https://github.com/AmusementClub/vs-mlrt/blob/abc5b1c777a5dde6bad51a099f28eba99375ef4e/scripts/vsmlrt.py#L1002
+		if not ext_proc :  ## https://github.com/AmusementClub/vs-mlrt/blob/abc5b1c777a5dde6bad51a099f28eba99375ef4e/scripts/vsmlrt.py#L1002
 			scale_model = 1
-	if model >= 47 : # https://github.com/AmusementClub/vs-mlrt/blob/abc5b1c777a5dde6bad51a099f28eba99375ef4e/scripts/vsmlrt.py#L994
+	if model >= 47 :  ## https://github.com/AmusementClub/vs-mlrt/blob/2adfbab790eebe51c62c886400b0662570dfe3e9/scripts/vsmlrt.py#L1036-L1037
 		scale_model = 1
 
-	tile_size = 32 / scale_model
+	tile_size = 32  ## https://github.com/AmusementClub/vs-mlrt/blob/2adfbab790eebe51c62c886400b0662570dfe3e9/scripts/vsmlrt.py#L1014-L1023
+	if model == 4251 :
+		tile_size = 128
+	elif model in [426, 4262] :
+		tile_size = 64
+	tile_size = tile_size / scale_model
 	w_tmp = math.ceil(w_in / tile_size) * tile_size - w_in
 	h_tmp = math.ceil(h_in / tile_size) * tile_size - h_in
 

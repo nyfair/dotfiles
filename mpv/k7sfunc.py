@@ -2,7 +2,7 @@
 ### 文档： https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
 ##################################################
 
-__version__ = "0.6.4"
+__version__ = "0.6.5"
 
 __all__ = [
 	"FMT_CHANGE", "FMT_CTRL", "FPS_CHANGE", "FPS_CTRL",
@@ -3055,6 +3055,8 @@ def UAI_DML(
 	input : vs.VideoNode,
 	clamp : bool = False,
 	model_pth : str = "",
+	fp16_mdl : bool = True,
+	fp16_qnt : bool = True,
 	gpu : typing.Literal[0, 1, 2] = 0,
 	gpu_t : int = 2,
 	vs_t : int = vs_thd_dft,
@@ -3099,10 +3101,13 @@ def UAI_DML(
 	fmt_in = input.format.id
 	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
 
-	clip = core.resize.Bilinear(clip=input, format=vs.RGBS, matrix_in_s="709")
+	if fp16_mdl :
+		fp16_qnt = False
+
+	clip = core.resize.Bilinear(clip=input, format=vs.RGBH if fp16_mdl else vs.RGBS, matrix_in_s="709")
 	if clamp :
 		clip = core.akarin.Expr(clips=clip, expr="x 0 1 clamp")
-	be_param = vsmlrt.BackendV2.ORT_DML(device_id=gpu, num_streams=gpu_t, fp16=True)
+	be_param = vsmlrt.BackendV2.ORT_DML(device_id=gpu, num_streams=gpu_t, fp16=fp16_qnt)
 	infer = vsmlrt.inference(clips=clip, network_path=mdl_pth, backend=be_param)
 	output = core.resize.Bilinear(clip=infer, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
 

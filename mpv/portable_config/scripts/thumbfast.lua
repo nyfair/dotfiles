@@ -1,6 +1,6 @@
 --[[
 SOURCE_ https://github.com/po5/thumbfast/blob/master/thumbfast.lua
-COMMIT_ 7c1718e14f084650970845eb443e29b58e27cf1d
+COMMIT_ 9deb0733c4e36938cf90e42ddfb7a19a8b2f4641
 文档_ thumbfast.conf
 
 适配多个OSC类脚本的新缩略图引擎
@@ -50,9 +50,9 @@ function subprocess(args, async, callback)
     callback = callback or function() end
 
     if async then
-        return mp.command_native_async({name = "subprocess", playback_only = true, args = args}, callback)
+        return mp.command_native_async({name = "subprocess", playback_only = true, args = args, env = "PATH="..os.getenv("PATH")}, callback)
     else
-        return mp.command_native({name = "subprocess", playback_only = false, capture_stdout = true, args = args})
+        return mp.command_native({name = "subprocess", playback_only = false, capture_stdout = true, args = args, env = "PATH="..os.getenv("PATH")})
     end
 end
 

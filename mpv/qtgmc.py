@@ -2,12 +2,12 @@
 ### K7sfunc 的可选附属脚本
 ##################################################
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 __all__ = ["QTGMC", "QTGMC_obs", "QTGMCv2"]
 
 
-from distutils.version import LooseVersion
+from k7sfunc import LooseVersion
 import functools
 import math
 import typing

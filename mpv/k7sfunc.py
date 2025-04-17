@@ -2,12 +2,12 @@
 ### 文档： https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
 ##################################################
 
-__version__ = "0.6.5"
+__version__ = "0.7.1"
 
 __all__ = [
 	"FMT_CHANGE", "FMT_CTRL", "FPS_CHANGE", "FPS_CTRL",
 	"ACNET_STD", "ARTCNN_NV", "CUGAN_NV", "EDI_US_STD", "ESRGAN_DML", "ESRGAN_NV", "NGU_HQ", "WAIFU_DML", "WAIFU_NV",
-	"MVT_LQ", "MVT_STD", "MVT_POT", "MVT_MQ", "RIFE_STD", "RIFE_NV", "SVP_LQ", "SVP_STD", "SVP_HQ", "SVP_PRO",
+	"MVT_LQ", "MVT_STD", "MVT_POT", "MVT_MQ", "RIFE_STD", "RIFE_DML", "RIFE_NV", "SVP_LQ", "SVP_STD", "SVP_HQ", "SVP_PRO",
 	"BILA_NV", "BM3D_NV", "CCD_STD", "DFTT_STD", "DFTT_NV", "DPIR_NR_NV", "FFT3D_STD", "NLM_STD", "NLM_NV",
 	"COLOR_P3W_FIX", "CSC_RB", "DEBAND_STD", "DEINT_LQ", "DEINT_STD", "DEINT_EX", "DPIR_DBLK_NV", "EDI_AA_STD", "EDI_AA_NV", "IVTC_STD", "STAB_STD", "STAB_HQ", "UAI_DML", "UAI_NV_TRT", "UVR_MAD",
 ]
@@ -1464,6 +1464,140 @@ def RIFE_STD(
 ## RIFE补帧
 ##################################################
 
+def RIFE_DML(
+	input : vs.VideoNode,
+	lt_d2k : bool = False,
+	model : typing.Literal[46, 4251, 426, 4262] = 46,
+	fp16_qnt : bool = True,
+	ext_proc : bool = True,
+	t_tta : bool = False,
+	fps_in : float = 23.976,
+	fps_num : int = 2,
+	fps_den : int = 1,
+	sc_mode : typing.Literal[0, 1, 2] = 1,
+	gpu : typing.Literal[0, 1, 2] = 0,
+	gpu_t : int = 2,
+	vs_t : int = vs_thd_dft,
+) -> vs.VideoNode :
+
+	func_name = "RIFE_DML"
+	if not isinstance(input, vs.VideoNode) :
+		raise vs.Error(f"模块 {func_name} 的子参数 input 的值无效")
+	if not isinstance(lt_d2k, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 lt_d2k 的值无效")
+	if model not in [46, 4251, 426, 4262] :
+		raise vs.Error(f"模块 {func_name} 的子参数 model 的值无效")
+	if not isinstance(fp16_qnt, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 fp16_qnt 的值无效")
+	if not isinstance(ext_proc, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 ext_proc 的值无效")
+	if not isinstance(t_tta, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 t_tta 的值无效")
+	if not isinstance(fps_in, (int, float)) or fps_in <= 0.0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_in 的值无效")
+	if not isinstance(fps_num, int) or fps_num < 2 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_num 的值无效")
+	if not isinstance(fps_den, int) or fps_den >= fps_num or fps_num/fps_den <= 1 :
+		raise vs.Error(f"模块 {func_name} 的子参数 fps_den 的值无效")
+	if sc_mode not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 sc_mode 的值无效")
+	if gpu not in [0, 1, 2] :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
+	if not isinstance(gpu_t, int) or gpu_t <= 0 :
+		raise vs.Error(f"模块 {func_name} 的子参数 gpu_t 的值无效")
+	if not isinstance(vs_t, int) or vs_t > vs_thd_init :
+		raise vs.Error(f"模块 {func_name} 的子参数 vs_t 的值无效")
+
+	if not hasattr(core, "trt") :
+		raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 trt")
+	if sc_mode == 1 :
+		if not hasattr(core, "misc") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 misc")
+	elif sc_mode == 2 :
+		if not hasattr(core, "mv") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 mv")
+	if not (fps_num/fps_den).is_integer() :
+		if not hasattr(core, "akarin") :
+			raise ModuleNotFoundError(f"模块 {func_name} 依赖错误：缺失插件，检查项目 akarin")
+
+	plg_dir = os.path.dirname(core.trt.Version()["path"]).decode()
+	mdl_pname = "rife/" if ext_proc else "rife_v2/"
+	if model in [4251, 426, 4262] :  ## https://github.com/AmusementClub/vs-mlrt/blob/2adfbab790eebe51c62c886400b0662570dfe3e9/scripts/vsmlrt.py#L1031-L1032
+		t_tta = False
+	if t_tta :
+		mdl_fname = ["rife_v4.6_ensemble"][[46].index(model)]
+	else :
+		mdl_fname = ["rife_v4.6", "rife_v4.25_lite", "rife_v4.26", "rife_v4.26_heavy"][[46, 4251, 426, 4262].index(model)]
+	mdl_pth = plg_dir + "/models/" + mdl_pname + mdl_fname + ".onnx"
+	if not os.path.exists(mdl_pth) :
+		raise vs.Error(f"模块 {func_name} 所请求的模型缺失")
+
+	global vsmlrt
+	if vsmlrt is None :
+		try :
+			import vsmlrt
+		except ImportError :
+			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt")
+	if LooseVersion(vsmlrt.__version__) < LooseVersion("3.22.13") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 vsmlrt 的版本号过低，至少 3.22.13")
+
+	core.num_threads = vs_t
+	w_in, h_in = input.width, input.height
+	size_in = w_in * h_in
+	colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+	fmt_in = input.format.id
+	fps_factor = fps_num/fps_den
+
+	if (not lt_d2k and (size_in > 2048 * 1088)) or (size_in > 4096 * 2176) :
+		raise Exception("源分辨率超过限制的范围，已临时中止。")
+
+	scale_model = 1
+	if lt_d2k and (size_in > 2048 * 1088) :
+		scale_model = 0.5
+		if not ext_proc :  ## https://github.com/AmusementClub/vs-mlrt/blob/abc5b1c777a5dde6bad51a099f28eba99375ef4e/scripts/vsmlrt.py#L1002
+			scale_model = 1
+	if model >= 47 :  ## https://github.com/AmusementClub/vs-mlrt/blob/2adfbab790eebe51c62c886400b0662570dfe3e9/scripts/vsmlrt.py#L1036-L1037
+		scale_model = 1
+
+	tile_size = 32  ## https://github.com/AmusementClub/vs-mlrt/blob/2adfbab790eebe51c62c886400b0662570dfe3e9/scripts/vsmlrt.py#L1014-L1023
+	if model == 4251 :
+		tile_size = 128
+	elif model in [426, 4262] :
+		tile_size = 64
+	tile_size = tile_size / scale_model
+	w_tmp = math.ceil(w_in / tile_size) * tile_size - w_in
+	h_tmp = math.ceil(h_in / tile_size) * tile_size - h_in
+
+	if sc_mode == 0 :
+		cut0 = input
+	elif sc_mode == 1 :
+		cut0 = core.misc.SCDetect(clip=input, threshold=0.15)
+	elif sc_mode == 2 :
+		sup = core.mv.Super(clip=input, pel=1)
+		vec = core.mv.Analyse(super=sup, isb=True)
+		cut0 = core.mv.SCDetection(clip=input, vectors=vec, thscd1=240, thscd2=130)
+
+	cut1 = core.resize.Bilinear(clip=cut0, format=vs.RGBS, matrix_in_s="709")
+	if ext_proc :
+		if w_tmp + h_tmp > 0 :
+			cut1 = core.std.AddBorders(clip=cut1, right=w_tmp, bottom=h_tmp)
+		fin = vsmlrt.RIFE(clip=cut1, multi=fractions.Fraction(fps_num, fps_den), scale=scale_model, model=model, ensemble=t_tta, _implementation=1, video_player=True, backend=vsmlrt.BackendV2.ORT_DML(
+			num_streams=gpu_t, fp16=fp16_qnt, device_id=gpu))
+		if w_tmp + h_tmp > 0 :
+			fin = core.std.Crop(clip=fin, right=w_tmp, bottom=h_tmp)
+	else :
+		fin = vsmlrt.RIFE(clip=cut1, multi=fractions.Fraction(fps_num, fps_den), scale=scale_model, model=model, ensemble=t_tta, _implementation=2, video_player=True, backend=vsmlrt.BackendV2.ORT_DML(
+			num_streams=gpu_t, fp16=fp16_qnt))
+	output = core.resize.Bilinear(clip=fin, format=fmt_in, matrix_s="709", range=1 if colorlv==0 else None)
+	if not fps_factor.is_integer() :
+		output = core.std.AssumeFPS(clip=output, fpsnum=fps_in * fps_num * 1e6, fpsden=fps_den * 1e6)
+
+	return output
+
+##################################################
+## RIFE补帧
+##################################################
+
 def RIFE_NV(
 	input : vs.VideoNode,
 	lt_d2k : bool = False,
@@ -1575,6 +1709,17 @@ def RIFE_NV(
 	w_tmp = math.ceil(w_in / tile_size) * tile_size - w_in
 	h_tmp = math.ceil(h_in / tile_size) * tile_size - h_in
 
+	shape_config = {
+		32: {"min": (10, 8), "opt": (60, 34), "max1": (128, 68), "max2": (64, 34)},
+		64: {"min": (5, 4), "opt": (30, 17), "max1": (64, 34), "max2": (32, 17)},
+		128: {"min": (3, 2), "opt": (15, 9), "max1": (32, 17), "max2": (16, 9)},
+	}
+	cfg = shape_config[tile_size]
+	min_shapes = [tile_size * x for x in cfg["min"]]
+	opt_shapes = [tile_size * x for x in cfg["opt"]]
+	max_shapes = [tile_size * x for x in cfg["max1"]]
+	max_shapes2 = [tile_size * x for x in cfg["max2"]]
+
 	if sc_mode == 0 :
 		cut0 = input
 	elif sc_mode == 1 :
@@ -1592,8 +1737,8 @@ def RIFE_NV(
 			num_streams=gpu_t, force_fp16=True, output_format=1,
 			workspace=None if ws_size < 128 else (ws_size if st_eng else ws_size * 2),
 			use_cuda_graph=True, use_cublas=False, use_cudnn=False,
-			static_shape=st_eng, min_shapes=[0, 0] if st_eng else [320, 256],
-			opt_shapes=None if st_eng else [1920, 1088], max_shapes=None if st_eng else ([4096, 2176] if lt_d2k else [2048, 1088]),
+			static_shape=st_eng, min_shapes=[0, 0] if st_eng else min_shapes,
+			opt_shapes=None if st_eng else opt_shapes, max_shapes=None if st_eng else (max_shapes if lt_d2k else max_shapes2),
 			device_id=gpu, short_path=True))
 		if w_tmp + h_tmp > 0 :
 			fin = core.std.Crop(clip=fin, right=w_tmp, bottom=h_tmp)
@@ -2720,8 +2865,8 @@ def DEINT_EX(
 			import qtgmc
 		except ImportError :
 			raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 qtgmc")
-	if LooseVersion(qtgmc.__version__) < LooseVersion("0.0.3") :
-		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 qtgmc 的版本号过低，至少 0.0.3")
+	if LooseVersion(qtgmc.__version__) < LooseVersion("0.2.0") :
+		raise ImportError(f"模块 {func_name} 依赖错误：缺失脚本 qtgmc 的版本号过低，至少 0.2.0")
 
 	output = qtgmc.QTGMCv2(input=input, fps_in=fps_in, obs=obs, deint_lv=deint_lv, src_type=src_type, deint_den=deint_den, tff=tff, cpu=cpu, gpu=gpu)
 
@@ -3069,6 +3214,10 @@ def UAI_DML(
 		raise vs.Error(f"模块 {func_name} 的子参数 clamp 的值无效")
 	if len(model_pth) <= 5 :
 		raise vs.Error(f"模块 {func_name} 的子参数 model_pth 的值无效")
+	if not isinstance(fp16_mdl, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 fp16_mdl 的值无效")
+	if not isinstance(fp16_qnt, bool) :
+		raise vs.Error(f"模块 {func_name} 的子参数 fp16_qnt 的值无效")
 	if gpu not in [0, 1, 2] :
 		raise vs.Error(f"模块 {func_name} 的子参数 gpu 的值无效")
 	if not isinstance(gpu_t, int) or gpu_t <= 0 :

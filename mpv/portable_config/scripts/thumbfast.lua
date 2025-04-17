@@ -44,16 +44,73 @@ mp.utils = require "mp.utils"
 mp.options = require "mp.options"
 mp.options.read_options(options)
 
+local function get_os()
+    local raw_os_name = ""
+
+    if jit and jit.os and jit.arch then
+        raw_os_name = jit.os
+    else
+        if package.config:sub(1,1) == "\\" then
+            -- Windows
+            local env_OS = os.getenv("OS")
+            if env_OS then
+                raw_os_name = env_OS
+            end
+        else
+            raw_os_name = subprocess({"uname", "-s"}).stdout
+        end
+    end
+
+    raw_os_name = (raw_os_name):lower()
+
+    local os_patterns = {
+        ["windows"] = "windows",
+        ["linux"]   = "linux",
+
+        ["osx"]     = "darwin",
+        ["mac"]     = "darwin",
+        ["darwin"]  = "darwin",
+
+        ["^mingw"]  = "windows",
+        ["^cygwin"] = "windows",
+
+        ["bsd$"]    = "darwin",
+        ["sunos"]   = "darwin"
+    }
+
+    -- 默认为WIN
+    local str_os_name = "windows"
+
+    for pattern, name in pairs(os_patterns) do
+        if raw_os_name:match(pattern) then
+            str_os_name = name
+            break
+        end
+    end
+
+    return str_os_name
+end
+
+local os_name = mp.get_property("platform") or get_os()
+
 local properties = {}
 
 function subprocess(args, async, callback)
     callback = callback or function() end
+    local command = {
+        name = "subprocess",
+        args = args,
+        playback_only = async,
+        capture_stdout = not async,
+    }
 
-    if async then
-        return mp.command_native_async({name = "subprocess", playback_only = true, args = args, env = "PATH="..os.getenv("PATH")}, callback)
-    else
-        return mp.command_native({name = "subprocess", playback_only = false, capture_stdout = true, args = args, env = "PATH="..os.getenv("PATH")})
+    if os_name == "darwin" then
+        command.env = "PATH=" .. os.getenv("PATH")
     end
+
+    return async and
+        mp.command_native_async(command, callback) or
+        mp.command_native(command)
 end
 
 local winapi = {}
@@ -144,55 +201,6 @@ trap "kill 0" EXIT
 while [[ $# -ne 0 ]]; do case $1 in --mpv-ipc-fd=*) MPV_IPC_FD=${1/--mpv-ipc-fd=/} ;; esac; shift; done
 if echo "print-text thumbfast" >&"$MPV_IPC_FD"; then echo -n > "$MPV_IPC_PATH"; tail -f "$MPV_IPC_PATH" >&"$MPV_IPC_FD" & while read -r -u "$MPV_IPC_FD" 2>/dev/null; do :; done; fi
 ]=]
-
-local function get_os()
-    local raw_os_name = ""
-
-    if jit and jit.os and jit.arch then
-        raw_os_name = jit.os
-    else
-        if package.config:sub(1,1) == "\\" then
-            -- Windows
-            local env_OS = os.getenv("OS")
-            if env_OS then
-                raw_os_name = env_OS
-            end
-        else
-            raw_os_name = subprocess({"uname", "-s"}).stdout
-        end
-    end
-
-    raw_os_name = (raw_os_name):lower()
-
-    local os_patterns = {
-        ["windows"] = "windows",
-        ["linux"]   = "linux",
-
-        ["osx"]     = "darwin",
-        ["mac"]     = "darwin",
-        ["darwin"]  = "darwin",
-
-        ["^mingw"]  = "windows",
-        ["^cygwin"] = "windows",
-
-        ["bsd$"]    = "darwin",
-        ["sunos"]   = "darwin"
-    }
-
-    -- 默认为WIN
-    local str_os_name = "windows"
-
-    for pattern, name in pairs(os_patterns) do
-        if raw_os_name:match(pattern) then
-            str_os_name = name
-            break
-        end
-    end
-
-    return str_os_name
-end
-
-local os_name = mp.get_property("platform") or get_os()
 
 if options.socket == "" then
     if os_name == "windows" then
@@ -417,8 +425,9 @@ local function spawn(time)
     local args = {
         mpv_path, "--config=no", "--terminal=no", "--msg-level=all=no", "--idle=yes", "--keep-open=always",
         "--pause=yes", "--ao=null",
-        "--load-auto-profiles=no", "--load-osd-console=no", "--load-select=no", "--load-stats-overlay=no", "--osc=no", "--autoload-files=no",
-        "--vd-lavc-skiploopfilter=all", "--vd-lavc-skipidct=all", "--vd-lavc-software-fallback=1", "--vd-lavc-fast",
+        "--osc=no", "--load-stats-overlay=no", "load-console=no", "load-commands=no", "--load-auto-profiles=no", "--load-select=no", "--load-positioning=no",
+        "--clipboard-backends-clr", "--video-osd=no", "--autoload-files=no",
+        "--vd-lavc-skiploopfilter=all", "--vd-lavc-skipidct=all", "--hwdec-software-fallback=1", "--vd-lavc-fast",
         "--vd-lavc-threads="..options.sw_threads, "--hwdec="..options.hwdec,
         "--edition="..(properties["edition"] or "auto"), "--vid="..(vid or "auto"), "--sub=no", "--audio=no",
         "--start="..time,

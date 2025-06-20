@@ -13,13 +13,19 @@ COMMIT_ 9deb0733c4e36938cf90e42ddfb7a19a8b2f4641
 
 ]]
 
+local mp = require "mp"
+mp.options = require "mp.options"
+mp.utils = require "mp.utils"
+
 local options = {
+
+    load = true,
 
     socket = "",
     tnpath = "",
 
-    max_height = 360,
-    max_width = 360,
+    max_height = 320,
+    max_width = 320,
 
     overlay_id = 42,
 
@@ -32,85 +38,69 @@ local options = {
     hwdec = "yes",
     sw_threads = 2,
     binpath = "default",
-    min_duration = 0,
+    min_duration = 10,
     precise = 0,
-    quality = 0,                 -- require vf_libplacebo for 3
-    frequency = 0.1,
-    auto_run = true,
+    quality = 1,
+    frequency = 0.125,
 
 }
-
-mp.utils = require "mp.utils"
-mp.options = require "mp.options"
 mp.options.read_options(options)
 
-local function get_os()
-    local raw_os_name = ""
+if options.load == false then
+    mp.msg.info("脚本已被初始化禁用")
+    return
+end
+-- 原因：--load-osd-console 重命名为 --load-console
+local min_major = 0
+local min_minor = 40
+local min_patch = 0
+local mpv_ver_curr = mp.get_property_native("mpv-version", "unknown")
+local function incompat_check(full_str, tar_major, tar_minor, tar_patch)
+    if full_str == "unknown" then
+        return true
+    end
 
-    if jit and jit.os and jit.arch then
-        raw_os_name = jit.os
-    else
-        if package.config:sub(1,1) == "\\" then
-            -- Windows
-            local env_OS = os.getenv("OS")
-            if env_OS then
-                raw_os_name = env_OS
+    local clean_ver_str = full_str:gsub("^[^%d]*", "")
+    local major, minor, patch = clean_ver_str:match("^(%d+)%.(%d+)%.(%d+)")
+    major = tonumber(major)
+    minor = tonumber(minor)
+    patch = tonumber(patch or 0)
+    if major < tar_major then
+        return true
+    elseif major == tar_major then
+        if minor < tar_minor then
+            return true
+        elseif minor == tar_minor then
+            if patch < tar_patch then
+                return true
             end
-        else
-            raw_os_name = subprocess({"uname", "-s"}).stdout
         end
     end
 
-    raw_os_name = (raw_os_name):lower()
-
-    local os_patterns = {
-        ["windows"] = "windows",
-        ["linux"]   = "linux",
-
-        ["osx"]     = "darwin",
-        ["mac"]     = "darwin",
-        ["darwin"]  = "darwin",
-
-        ["^mingw"]  = "windows",
-        ["^cygwin"] = "windows",
-
-        ["bsd$"]    = "darwin",
-        ["sunos"]   = "darwin"
-    }
-
-    -- 默认为WIN
-    local str_os_name = "windows"
-
-    for pattern, name in pairs(os_patterns) do
-        if raw_os_name:match(pattern) then
-            str_os_name = name
-            break
-        end
-    end
-
-    return str_os_name
+    return false
+end
+if incompat_check(mpv_ver_curr, min_major, min_minor, min_patch) then
+    mp.msg.warn("当前mpv版本 (" .. (mpv_ver_curr or "未知") .. ") 低于 " .. min_major .. "." .. min_minor .. "." .. min_patch .. "，已终止缩略图功能。")
+    return
 end
 
-local os_name = mp.get_property("platform") or get_os()
+local os_name = mp.get_property("platform")
 
 local properties = {}
 
 function subprocess(args, async, callback)
     callback = callback or function() end
-    local command = {
-        name = "subprocess",
-        args = args,
-        playback_only = async,
-        capture_stdout = not async,
-    }
+    local command1 = { name = "subprocess", args = args, playback_only = true, }
+    local command2 = { name = "subprocess", args = args, playback_only = false, capture_stdout = true, }
 
     if os_name == "darwin" then
-        command.env = "PATH=" .. os.getenv("PATH")
+        command1.env = "PATH=" .. os.getenv("PATH")
+        command2.env = "PATH=" .. os.getenv("PATH")
     end
 
     return async and
-        mp.command_native_async(command, callback) or
-        mp.command_native(command)
+        mp.command_native_async(command1, callback) or
+        mp.command_native(command2)
 end
 
 local winapi = {}
@@ -288,7 +278,7 @@ end
 
 local info_timer = nil
 
-local auto_run = options.auto_run
+local auto_run = true
 
 local function info(w, h)
     local short_video = mp.get_property_number("duration", 0) <= options.min_duration
@@ -330,72 +320,33 @@ end
 local activity_timer
 
 local scale_sw = "fast-bilinear"
-local vf_str
-local quality = options.quality
 local seek_period_raw = options.frequency
 local seek_period_cur = seek_period_raw
 local precise_raw = options.precise
 local precise_cur = precise_raw
 
-if quality == 0 then
-    if precise_raw == 2 then
-        quality = 2
-    elseif precise_raw == 0 then
-        quality = 1
-    elseif precise_raw == 1 then
-        quality = 1
+local function vf_gen()
+    local qc = tonumber(options.quality) or 1
+    local hdr = mp.get_property_number("video-params/sig-peak", 1)
+    -- local vf_str_op = "format=w="..effective_w..":h="..effective_h
+    local vf_str_ed = ",format=fmt=bgra"
+    local vf_str_full = "scale=w="..effective_w..":h="..effective_h..vf_str_ed
+    if qc > 1 then
+        vf_str_full = "gpu=api=vulkan:w="..effective_w..":h="..effective_h..vf_str_ed
     end
-    if options.sw_threads >= 3 then
-        quality = 2
-        if options.sw_threads >= 6 then
-            quality = 3
-        end
-    elseif options.sw_threads == 1 then
-        quality = 1
-    end
-end
-
-if quality >= 2 then
-    scale_sw = "bicublin"
-end
-
-local function quality_fin()
-    local vf_str_pre = "scale=w="..effective_w..":h="..effective_h
-    local vf_str_suffix = "format=fmt=bgra"
-    if quality == 1 then
-        vf_str = vf_str_pre..":flags=fast_bilinear,"..vf_str_suffix
-    elseif quality == 2 then
-        vf_str = vf_str_pre..":flags=bicublin,"..vf_str_suffix
-        if mp.get_property_number("video-params/sig-peak", 1) > 1 then
-            vf_str = vf_str_pre..":flags=bicublin,format=fmt=gbrapf32,zscale=t=linear:npl=203,tonemap=tonemap=hable:desat=0.0,zscale=p=709:t=709:m=709,"..vf_str_suffix
-        end
-    elseif quality == 3 then
-        if mp.get_property_number("video-out-params/max-luma", 1) > 203 then
-            vf_str = "lavfi=[libplacebo=w="..effective_w..":h="..effective_h..":colorspace=bt709:color_primaries=bt709:color_trc=bt709:tonemapping=hable:format=bgra]"
-
-            -- 无奈的workaround
-            if seek_period_cur < 0.5 then
-                seek_period_cur = 0.5
-                mp.msg.warn("已延迟请求频率以匹配性能需求")
-            end
-            if precise_cur == 0 then
-                precise_cur = 1
-                mp.msg.info("已降低时间轴精度以匹配性能需求")
-            end
-
-        else -- down2lv2
-            vf_str = vf_str_pre..":flags=bicublin,"..vf_str_suffix
-
-            if seek_period_cur ~= seek_period_raw then
-                seek_period_cur = seek_period_raw
-            end
-            if precise_cur ~= precise_raw then
-                precise_cur = precise_raw
-            end
-
+    if hdr > 1 then
+        local hdr10 = mp.get_property_number("video-out-params/max-cll", 0)
+        local dvp = mp.get_property_number("current-tracks/video/dolby-vision-profile", 0)
+        local dvl = mp.get_property_number("current-tracks/video/dolby-vision-level", 0)
+        local dvp5 = dvp == 5
+        local dvp8_4 = (dvp == 8) and (dvl == 7) and (hdr10 == 0)
+        if dvp5 and (qc > 2) then
+            vf_str_full = "scale=w="..effective_w..":h="..effective_h..",libplacebo=colorspace=bt709:color_primaries=bt709:color_trc=bt709:tonemapping=hable"..vf_str_ed
+        elseif dvp8_4 and (qc < 2) then
+            vf_str_full = "scale=w="..effective_w..":h="..effective_h..",tonemap=tonemap=hable,zscale=transfer=linear,format=fmt=gbrp,zscale=primaries=bt709:transfer=bt709:matrix=bt709:range=pc"..vf_str_ed
         end
     end
-    return vf_str
+    return vf_str_full
 end
 
 local function spawn(time)
@@ -427,24 +378,24 @@ local function spawn(time)
         "--pause=yes", "--ao=null",
         "--osc=no", "--load-stats-overlay=no", "load-console=no", "load-commands=no", "--load-auto-profiles=no", "--load-select=no", "--load-positioning=no",
         "--clipboard-backends-clr", "--video-osd=no", "--autoload-files=no",
-        "--vd-lavc-skiploopfilter=all", "--vd-lavc-skipidct=all", "--hwdec-software-fallback=1", "--vd-lavc-fast",
-        "--vd-lavc-threads="..options.sw_threads, "--hwdec="..options.hwdec,
+        "--vd-lavc-skiploopfilter=all", "--vd-lavc-skipidct=all", "--vd-lavc-fast", "--vd-lavc-threads="..options.sw_threads, "--hwdec="..options.hwdec,
         "--edition="..(properties["edition"] or "auto"), "--vid="..(vid or "auto"), "--sub=no", "--audio=no",
         "--start="..time,
-        "--gpu-dumb-mode=yes", "--dither-depth=no", "--tone-mapping=clip", "--hdr-compute-peak=no",
-        "--sws-allow-zimg=no", "--sws-fast=yes", "--sws-scaler="..scale_sw,
+        "--dither-depth=no", "--tone-mapping=hable",
+        "--audio-pitch-correction=no", "--deinterlace=no",
         "--ytdl-format=worst", "--demuxer-readahead-secs=0", "--demuxer-max-bytes=128KiB",
-        "--vf="..quality_fin(), "--audio-pitch-correction=no", "--deinterlace=no",
-        "--ovc=rawvideo", "--of=image2", "--ofopts=update=1", "--ocopy-metadata=no", "--o="..options.tnpath
+        "--vf="..vf_gen(), "--ovc=rawvideo", "--of=image2", "--ofopts=update=1", "--ocopy-metadata=no", "--o="..options.tnpath
     }
 
     if os_name == "darwin" then
         table.insert(args, "--macos-app-activation-policy=prohibited")
+        table.insert(args, "--input-media-keys=no")
     end
 
     if os_name == "windows" then
         table.insert(args, "--media-controls=no")
         table.insert(args, "--input-ipc-server="..options.socket)
+        table.insert(args, "--input-media-keys=no")
     elseif not script_written then
         local client_script_path = options.socket..".run"
         local script = io.open(client_script_path, "w+")
@@ -536,7 +487,7 @@ local function real_res(req_w, req_h, filesize)
     local count = filesize / 4
     local diff = (req_w * req_h) - count
 
-    if (properties["video-params"] and properties["video-params"]["rotate"] or 0) % 180 == 90 then
+    if (properties["video-dec-params"] and properties["video-dec-params"]["rotate"] or 0) % 180 == 90 then
         req_w, req_h = req_h, req_w
     end
 
@@ -814,6 +765,7 @@ end)
 mp.observe_property("track-list", "native", update_tracklist)
 mp.observe_property("display-hidpi-scale", "native", update_property_dirty)
 mp.observe_property("video-params", "native", update_property_dirty)
+mp.observe_property("video-dec-params", "native", update_property_dirty)
 mp.observe_property("demuxer-via-network", "native", update_property)
 mp.observe_property("stream-open-filename", "native", update_property)
 mp.observe_property("path", "native", update_property)
@@ -832,17 +784,21 @@ mp.add_key_binding(nil, "thumb_rerun", function()
     auto_run = true
     file_load()
     mp.osd_message("缩略图功能已重启", 2)
+    mp.msg.info("缩略图功能已重启")
 end)
 mp.add_key_binding(nil, "thumb_toggle", function()
     if auto_run then
         auto_run = false
-        file_load()
+        clear()
         shutdown()
-        mp.osd_message("缩略图功能已禁用", 2)
+        file_load()
+        mp.osd_message("缩略图功能已临时禁用", 2)
+        mp.msg.info("缩略图功能已临时禁用")
     else
         auto_run = true
         file_load()
-        mp.osd_message("缩略图功能已启用", 2)
+        mp.osd_message("缩略图功能已临时启用", 2)
+        mp.msg.info("缩略图功能已临时启用")
     end
 end)
 mp.register_script_message("thumb_hwdec", function(hwdec_api)
@@ -857,6 +813,7 @@ mp.register_script_message("thumb_hwdec", function(hwdec_api)
     end
     options.hwdec = hwdec_api
     mp.osd_message("缩略图已变更首选解码API：" .. hwdec_api, 2)
+    mp.msg.info("缩略图已变更首选解码API：" .. hwdec_api)
     clear()
     shutdown()
     file_load()

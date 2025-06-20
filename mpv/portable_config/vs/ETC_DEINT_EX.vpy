@@ -22,5 +22,5 @@ Gpu = -1
 ## <True|False> 是否仅使用CPU
 ## <-1|0|1|2> 使用的显卡序号，-1 为自动，0 为排序一号
 
-clip = k7f.DEINT_EX(clip, fps_in=container_fps, obs=True, deint_lv=Deint_Lv, src_type=Src_Type, deint_den=1, tff=Tff, cpu=Cpu, gpu=Gpu)
+clip = k7f.DEINT_EX(clip, fps_in=container_fps, deint_lv=Deint_Lv, src_type=Src_Type, deint_den=1, tff=Tff, cpu=Cpu, gpu=Gpu)
 clip.set_output()

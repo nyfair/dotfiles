@@ -1,6 +1,6 @@
 ### 使用自定义的AI放大模型，RTX N卡专用
-### 文档_ https://github.com/hooke007/MPV_lazy/discussions/329
-### 参数_ https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc#uai_nv_trt
+### 文档_ https://github.com/hooke007/mpv_PlayKit/discussions/329
+### 参数_ https://github.com/hooke007/mpv_PlayKit/wiki/3_K7sfunc#uai_nv_trt
 
 import vapoursynth as vs
 from vapoursynth import core

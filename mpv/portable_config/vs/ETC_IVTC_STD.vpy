@@ -1,4 +1,4 @@
-### https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
+### https://github.com/hooke007/mpv_PlayKit/wiki/3_K7sfunc
 ### 伪25或30帧的源转24帧
 
 import vapoursynth as vs

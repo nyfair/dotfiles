@@ -1,4 +1,4 @@
-### https://github.com/hooke007/MPV_lazy/wiki/3_K7sfunc
+### https://github.com/hooke007/mpv_PlayKit/wiki/3_K7sfunc
 ### rife v4+ 补帧，性能要求很高
 
 import vapoursynth as vs

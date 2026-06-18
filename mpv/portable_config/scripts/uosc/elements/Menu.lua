@@ -37,6 +37,18 @@ function Menu:open(data, callback, opts)
 		open_menu.is_being_replaced = true
 		open_menu:close(true)
 	end
+	-- 互斥1：关闭已打开的 mpv osd菜单
+	if mp.get_property_native('user-data/mpv/context-menu/open') then
+		for _ = 1, 5 do
+			mp.commandv('script-message-to', 'context_menu', '_context_menu_ESC')
+		end
+		--mp.commandv('script-message-to', 'context_menu', '_context_menu_MBTN_LEFT')
+	end
+	-- 互斥2：关闭已打开的 mpv console/select 菜单（只关闭 select 脚本发起的，不影响打开的控制台）
+	if mp.get_property_native('user-data/mpv/console/open') then
+		mp.commandv('script-message-to', 'console', 'disable',
+			utils.format_json({client_name = 'select'}))
+	end
 	return Menu:new(data, callback, opts)
 end
 
@@ -145,8 +157,10 @@ function Menu:init(data, callback, opts)
 	for _, menu in ipairs(self.all) do self:scroll_to_index(menu.selected_index, menu.id) end
 	if self.mouse_nav then self.current.selected_index = nil end
 
+	-- 幽灵模式：菜单实例存在（保留互斥、Curtain联动、on_close回调等机制），但不渲染任何面板也不注册键盘绑定
+	self.phantom = data.phantom or false
 	self:tween_property('opacity', 0, 1)
-	self:enable_key_bindings()
+	if not self.phantom then self:enable_key_bindings() end
 	if data.curtain ~= false then
 		Elements:maybe('curtain', 'register', self.id)
 	else
@@ -1374,6 +1388,7 @@ function Menu:command_or_event(command, params, event)
 end
 
 function Menu:render()
+	if self.phantom then return end -- 幽灵模式跳过所有渲染
 	for _, menu in ipairs(self.all) do
 		if menu.fling then
 			local time_delta = state.render_last_time - menu.fling.time
@@ -1569,7 +1584,7 @@ function Menu:render()
 
 						-- Select action on cursor hover
 						if self.mouse_nav and get_point_to_rectangle_proximity(cursor, rect) <= 0 then
-							cursor:zone('primary_down', rect, self:create_action(function(shortcut)
+							cursor:zone('primary_click', rect, self:create_action(function(shortcut)
 								self:activate_selected_item(shortcut, true)
 							end))
 							blur_action_index = false

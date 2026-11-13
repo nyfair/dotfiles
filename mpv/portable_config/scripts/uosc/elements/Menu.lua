@@ -37,18 +37,6 @@ function Menu:open(data, callback, opts)
 		open_menu.is_being_replaced = true
 		open_menu:close(true)
 	end
-	-- 互斥1：关闭已打开的 mpv osd菜单
-	if mp.get_property_native('user-data/mpv/context-menu/open') then
-		for _ = 1, 5 do
-			mp.commandv('script-message-to', 'context_menu', '_context_menu_ESC')
-		end
-		--mp.commandv('script-message-to', 'context_menu', '_context_menu_MBTN_LEFT')
-	end
-	-- 互斥2：关闭已打开的 mpv console/select 菜单（只关闭 select 脚本发起的，不影响打开的控制台）
-	if mp.get_property_native('user-data/mpv/console/open') then
-		mp.commandv('script-message-to', 'console', 'disable',
-			utils.format_json({client_name = 'select'}))
-	end
 	return Menu:new(data, callback, opts)
 end
 
@@ -77,7 +65,6 @@ function Menu:close(immediate, callback)
 		end
 
 		local function close()
-			local current_id = menu.current and menu.current.id -- 增加层级记忆
 			local on_close = menu.root.on_close -- removed in menu:destroy()
 			Elements:remove('menu') -- calls menu:destroy() under the hood
 			Elements:update_proximities()
@@ -87,7 +74,7 @@ function Menu:close(immediate, callback)
 			if callback then callback() end
 
 			-- Call callbacks/events defined on menu config
-			local close_event = {type = 'close', menu_id = current_id} -- 增加层级记忆
+			local close_event = {type = 'close'}
 			if not on_close or menu:command_or_event(on_close, {}, close_event) ~= 'event' then
 				menu.callback(close_event)
 			end
@@ -121,6 +108,7 @@ function Menu:init(data, callback, opts)
 	self.opts = opts or {}
 	self.offset_x = 0 -- Used for submenu transition animation.
 	self.mouse_nav = self.opts.mouse_nav -- Stops pre-selecting items
+	self.mouse_hovered_index = nil -- Current menu's item being hovered by mouse, ignoring it's selectable or not.
 	self.item_height = nil
 	self.min_width = nil
 	self.item_spacing = 1
@@ -157,21 +145,9 @@ function Menu:init(data, callback, opts)
 	for _, menu in ipairs(self.all) do self:scroll_to_index(menu.selected_index, menu.id) end
 	if self.mouse_nav then self.current.selected_index = nil end
 
-	-- 幽灵模式：菜单实例存在（保留互斥、Curtain联动、on_close回调等机制），但不渲染任何面板也不注册键盘绑定
-	self.phantom = data.phantom or false
 	self:tween_property('opacity', 0, 1)
-	if not self.phantom then self:enable_key_bindings() end
-	if data.curtain ~= false then
-		Elements:maybe('curtain', 'register', self.id)
-	else
-		-- 替换了带 curtain 的菜单时，旧菜单因 is_being_replaced 跳过了 unregister
-		-- 需要在此处清空 curtain 的 dependents 使其正确消失
-		local curtain = Elements.curtain
-		if curtain and #curtain.dependents > 0 then
-			curtain.dependents = {}
-			curtain:tween_property('opacity', curtain.opacity, 0)
-		end
-	end
+	self:enable_key_bindings()
+	Elements:maybe('curtain', 'register', self.id)
 
 	if data.search_submit then
 		-- We have to defer this so that menu callbacks don't fire before the menu
@@ -231,7 +207,7 @@ function Menu:update(data)
 		-- Update items
 		local first_active_index = nil
 		menu.items = {
-			{title = ulang._menu_item_empty_title, value = 'ignore', italic = 'true', muted = 'true', selectable = false, align = 'center'},
+			{title = t('Empty'), value = 'ignore', italic = 'true', muted = 'true', selectable = false, align = 'center'},
 		}
 
 		for i, item_data in ipairs(menu_data.items or {}) do
@@ -372,9 +348,6 @@ function Menu:update_dimensions()
 			self.scroll_step + self.separator_size + 1 or 0
 		local footnote_height = self.font_size * 1.5
 		local max_height = height_available - title_height - footnote_height
-		if menu.max_items and menu.max_items > 0 then -- 限制显示项数
-			max_height = math.min(max_height, self.scroll_step * menu.max_items - self.item_spacing)
-		end
 		local content_height = self.scroll_step * #menu.items
 		menu.height = math.min(content_height - self.item_spacing, max_height)
 		menu.top = clamp(
@@ -728,7 +701,8 @@ end
 
 ---@param shortcut? Shortcut
 function Menu:handle_cursor_up(shortcut)
-	if self.proximity_raw <= -self.padding and self.drag_last_y and not self.is_dragging then
+	if self.proximity_raw <= -self.padding and self.drag_last_y and not self.is_dragging
+	and self.mouse_hovered_index == self.current.selected_index then
 		self:activate_selected_item(shortcut, true)
 	end
 	if self.is_dragging then
@@ -1388,7 +1362,6 @@ function Menu:command_or_event(command, params, event)
 end
 
 function Menu:render()
-	if self.phantom then return end -- 幽灵模式跳过所有渲染
 	for _, menu in ipairs(self.all) do
 		if menu.fling then
 			local time_delta = state.render_last_time - menu.fling.time
@@ -1485,14 +1458,16 @@ function Menu:render()
 			}
 
 			-- Select hovered item
-			if is_current and self.mouse_nav and item.selectable ~= false
-				-- Do not select items if cursor is moving towards a submenu
-				and (not submenu_rect or not cursor:direction_to_rectangle_distance(submenu_rect))
+			if is_current and self.mouse_nav
 				and (submenu_is_hovered or get_point_to_rectangle_proximity(cursor, item_rect_hitbox) <= 0) then
-				menu.selected_index = index
-				if not is_selected then
-					is_selected = true
-					request_render()
+				self.mouse_hovered_index = index
+				-- Do not select items if cursor is moving towards a submenu
+				if item.selectable ~= false and (not submenu_rect or not cursor:direction_to_rectangle_distance(submenu_rect)) then
+					menu.selected_index = index
+					if not is_selected then
+						is_selected = true
+						request_render()
+					end
 				end
 			end
 
@@ -1618,7 +1593,9 @@ function Menu:render()
 						and bg_rect.ax + (bg_rect.bx - bg_rect.ax) / 2
 						or content_bx - (icon_size / 2)
 					if item.icon == 'spinner' then
-						ass:spinner(x, item_center_y, icon_size * 1.5, {color = font_color, opacity = menu_opacity * 0.8})
+						ass:spinner(x, item_center_y, icon_size * 1.5, {
+							color = font_color, opacity = menu_opacity * 0.8, clip = item_clip,
+						})
 					else
 						ass:icon(x, item_center_y, icon_size * 1.5, item.icon, {
 							color = font_color, opacity = menu_opacity, clip = item_clip,
@@ -1785,7 +1762,7 @@ function Menu:render()
 				else
 					local placeholder = (menu.search_style == 'palette' and menu.ass_safe_title)
 						and menu.ass_safe_title
-						or (requires_submit and ulang._menu_search or ulang._menu_search2)
+						or (requires_submit and t('type & ctrl+enter to search') or t('type to search'))
 					ass:txt(rect.bx, rect.cy, 6, placeholder, {
 						size = self.font_size,
 						italic = true,

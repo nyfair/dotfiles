@@ -19,13 +19,6 @@ function Timeline:init()
 	self.is_hovered = false
 	self.has_thumbnail = false
 	self.heatmap = nil
-	self.thumb_request_ready = false
-	self.last_thumb_cursor_x = nil
-	self.thumb_idle_timer = mp.add_timeout(0.2, function()
-		self.thumb_request_ready = true
-		request_render()
-	end)
-	self.thumb_idle_timer:kill()
 
 	self:decide_progress_size()
 	self:update_dimensions()
@@ -136,7 +129,7 @@ end
 
 function Timeline:clear_thumbnail()
 	if self.has_thumbnail then
-		mp.commandv('script-message-to', options.thumbnail_provider, 'clear')
+		mp.commandv('script-message-to', 'thumbfast', 'clear')
 		self.has_thumbnail = false
 	end
 end
@@ -161,18 +154,12 @@ function Timeline:on_options()
 end
 function Timeline:handle_cursor_up()
 	if self.pressed then
-		local dominated = self.pressed.distance >= 5
 		mp.set_property_native('pause', self.pressed.pause)
 		self.pressed = false
-		if options.thumbnail_mode == 'natural' and self.proximity_raw <= 0 and dominated then
-			self.thumb_idle_timer:kill()
-			self.thumb_idle_timer:resume()
-		end
 	end
 end
 function Timeline:on_global_mouse_leave()
 	self.pressed = false
-	self:reset_thumbnail()
 end
 
 function Timeline:on_global_mouse_move()
@@ -187,16 +174,16 @@ function Timeline:on_global_mouse_move()
 	end
 end
 
-function Timeline:reset_thumbnail()
-	self:clear_thumbnail()
-	self.thumb_idle_timer:kill()
-	self.thumb_request_ready = false
-	self.last_thumb_cursor_x = nil
+function Timeline:cursor_command(command)
+	if type(command) == 'string' and #command > 0 and state.time and state.duration then
+		local expanded_command = command:gsub("{time}", self:get_time_at_x(cursor.x))
+		mp.command(expanded_command)
+	end
 end
 
 function Timeline:render()
 	if self.size == 0 then
-		self:reset_thumbnail()
+		self:clear_thumbnail()
 		return
 	end
 
@@ -205,7 +192,7 @@ function Timeline:render()
 	self.is_hovered = false
 
 	if size < 1 then
-		self:reset_thumbnail()
+		self:clear_thumbnail()
 		return
 	end
 
@@ -217,6 +204,11 @@ function Timeline:render()
 			self:handle_cursor_down()
 			cursor:once('primary_up', function() self:handle_cursor_up() end)
 		end)
+		if #options.timeline_mbtn_right > 0 then
+			cursor:zone('secondary_down', self, function()
+				self:cursor_command(options.timeline_mbtn_right)
+			end)
+		end
 		if config.timeline_step ~= 0 then
 			cursor:zone('wheel_down', self, function()
 				mp.commandv('seek', -config.timeline_step, config.timeline_step_flag)
@@ -485,30 +477,11 @@ function Timeline:render()
 		tooltip_anchor = ass:tooltip(tooltip_anchor, hovered_time_human, opts)
 
 		-- Thumbnail
-		local show_thumb = not thumbnail.disabled
+		if not thumbnail.disabled
+			and (not self.pressed or self.pressed.distance < 5)
 			and thumbnail.width ~= 0
 			and thumbnail.height ~= 0
-		if show_thumb and options.thumbnail_mode == 'natural' then
-			if self.pressed and self.pressed.distance >= 5 then
-				show_thumb = false
-				self.thumb_idle_timer:kill()
-				self.thumb_request_ready = false
-			elseif not self.pressed and cursor_x ~= self.last_thumb_cursor_x then
-				self.last_thumb_cursor_x = cursor_x
-				self.thumb_request_ready = false
-				self.thumb_idle_timer:kill()
-				self.thumb_idle_timer:resume()
-				show_thumb = false
-			else
-				if self.pressed then
-					self.last_thumb_cursor_x = cursor_x
-				end
-				show_thumb = self.thumb_request_ready
-			end
-		elseif show_thumb and options.thumbnail_mode == 'continuous' then
-			show_thumb = not self.pressed or self.pressed.distance < 5
-		end
-		if show_thumb then
+		then
 			local border = math.ceil(math.max(2, state.radius / 2) * state.scale)
 			local thumb_x_margin, thumb_y_margin = border + tooltip_gap + bax, border + tooltip_gap
 			local thumb_width, thumb_height = thumbnail.width, thumbnail.height
@@ -529,7 +502,7 @@ function Timeline:render()
 			})
 			local thumb_seconds = (state.rebase_start_time == false and state.start_time) and
 				(hovered_seconds - state.start_time) or hovered_seconds
-			mp.commandv('script-message-to', options.thumbnail_provider, 'thumb', thumb_seconds, thumb_x, thumb_y)
+			mp.commandv('script-message-to', 'thumbfast', 'thumb', thumb_seconds, thumb_x, thumb_y)
 			self.has_thumbnail, rendered_thumbnail = true, true
 			tooltip_anchor.ay = ay
 		end

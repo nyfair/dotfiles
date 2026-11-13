@@ -105,7 +105,7 @@ function TopBar:update_render_titles()
 	local main, alt = self.main_title, self.alt_title
 
 	if main == 'No file' then
-		main = ulang._border_title
+		main = t('No file')
 	end
 
 	-- Fall back to alt title if main is empty

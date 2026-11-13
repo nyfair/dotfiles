@@ -485,14 +485,13 @@ mp.set_key_bindings({
 }, 'wheel', 'force')
 
 -- Monitor mpv UI's and disable uosc's cursor handling when any are open
--- 已禁用：采用 main.lua / Menu.lua 的互斥方案，故不启用上游的「禁用光标处理」行为
---mp.observe_property('user-data/mpv/context-menu/open', 'bool', function(_, value)
---	if value == true then cursor:register_disabler('context-menu')
---	else cursor:unregister_disabler('context-menu') end
---end)
---mp.observe_property('user-data/mpv/console/open', 'bool', function(_, value)
---	if value == true then cursor:register_disabler('console')
---	else cursor:unregister_disabler('console') end
---end)
+mp.observe_property('user-data/mpv/context-menu/open', 'bool', function(_, value)
+	if value == true then cursor:register_disabler('context-menu')
+	else cursor:unregister_disabler('context-menu') end
+end)
+mp.observe_property('user-data/mpv/console/open', 'bool', function(_, value)
+	if value == true then cursor:register_disabler('console')
+	else cursor:unregister_disabler('console') end
+end)
 
 return cursor

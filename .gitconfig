@@ -1,5 +1,6 @@
 [core]
 	autocrlf = false
+	editor = notepad
 [user]
 	name = nyfair
 	email = nyfair2012@gmail.com
@@ -15,7 +16,7 @@
 	b = branch
 	c = commit -m
 	d = diff
-	e = clone
+	e = clone --depth 1
 	f = fetch
 	i = init
 	l = log
